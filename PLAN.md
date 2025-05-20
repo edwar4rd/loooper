@@ -16,3 +16,16 @@
 - In measure two, user setup loop 2 to record in (and only in) the next measure.
 - In measure three, loop 2 continue playing its previous content while simultaneously recording the newly captured audio.
 - In measure four, loop 2 stops recording but plays the combination of the audio recorded in the first and the third measure.
+
+## Program Structure
+
+- The program can be split into two: the audio callback(cpal) and the main draw thread (ratatui).
+  - The audio callback thread need to be strictly non-blocking, thus function calls like lock() cannot be used.
+  - 
+
+## Progarm States
+
+- Set Up
+- Prepare
+- CountIn
+- Rolling
