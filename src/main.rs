@@ -1,35 +1,113 @@
 use color_eyre::Result;
-use crossterm::event::{self, Event};
-use loooper::audio;
+use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
+use loooper::{CountInState, PrepareState, RollingState, SetUpState, audio};
 use ratatui::{DefaultTerminal, Frame};
 
-pub struct State {
-    bpm: f32,
-    time_signature: (u32, u32),
-    metronome: bool,
-    measure: u32,
-    sink: cpal::Stream,
-    source: cpal::Stream,
+#[derive(Debug)]
+pub enum State {
+    SetUp(SetUpState),
+    Prepare(PrepareState),
+    CountIn(CountInState),
+    Rolling(RollingState),
+}
+
+impl Default for State {
+    fn default() -> Self {
+        State::SetUp(SetUpState::default())
+    }
 }
 
 fn main() -> Result<()> {
-    color_eyre::install()?;
-    let _ = audio::host_device_setup()?;
+    color_eyre::install().inspect_err(|_| {
+        eprintln!("Failed to install color_eyre");
+    })?;
+    let _ = audio::host_device_setup().inspect_err(|err| {
+        eprintln!("Failed to setup audio host device: {}", err);
+        eprintln!("Is JACK started or pw-jack used?");
+    })?;
     let terminal = ratatui::init();
-    let result = run(terminal);
+    let mut state = State::default();
+
+    let result = state.run(terminal);
     ratatui::restore();
     result
 }
 
-fn run(mut terminal: DefaultTerminal) -> Result<()> {
-    loop {
-        terminal.draw(render)?;
-        if matches!(event::read()?, Event::Key(_)) {
-            break Ok(());
+impl State {
+    fn run(&mut self, mut terminal: DefaultTerminal) -> Result<()> {
+        while !self.exiting() {
+            terminal.draw(|frame| self.draw(frame))?;
+            self.handle_events()?;
+            if self.phase_changing() {
+                match self {
+                    State::SetUp(state) => {
+                        *self = State::Prepare(PrepareState {
+                            mbpm: state.mbpm,
+                            exit: false,
+                            next_phase: false,
+                        })
+                    }
+                    State::Prepare(state) => {
+                        *self = State::CountIn(CountInState {
+                            mbpm: state.mbpm,
+                            exit: false,
+                            next_phase: false,
+                        })
+                    }
+                    State::CountIn(state) => {
+                        *self = State::Rolling(RollingState {
+                            mbpm: state.mbpm,
+                            exit: false,
+                            next_phase: false,
+                        })
+                    }
+                    State::Rolling(state) => {
+                        *self = State::SetUp(SetUpState {
+                            mbpm: state.mbpm,
+                            precision: 10000,
+                            exit: false,
+                            next_phase: false,
+                        })
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn draw(&mut self, frame: &mut Frame) {
+        match self {
+            State::SetUp(state) => state.draw(frame),
+            State::Prepare(state) => state.draw(frame),
+            State::CountIn(state) => state.draw(frame),
+            State::Rolling(state) => state.draw(frame),
         }
     }
-}
 
-fn render(frame: &mut Frame) {
-    frame.render_widget("hello world", frame.area());
+    fn handle_events(&mut self) -> Result<()> {
+        match self {
+            State::SetUp(state) => state.handle_events(),
+            State::Prepare(state) => state.handle_events(),
+            State::CountIn(state) => state.handle_events(),
+            State::Rolling(state) => state.handle_events(),
+        }
+    }
+
+    fn phase_changing(&self) -> bool {
+        match self {
+            State::SetUp(state) => state.phase_changing(),
+            State::Prepare(state) => state.phase_changing(),
+            State::CountIn(state) => state.phase_changing(),
+            State::Rolling(state) => state.phase_changing(),
+        }
+    }
+
+    fn exiting(&self) -> bool {
+        match self {
+            State::SetUp(state) => state.exiting(),
+            State::Prepare(state) => state.exiting(),
+            State::CountIn(state) => state.exiting(),
+            State::Rolling(state) => state.exiting(),
+        }
+    }
 }

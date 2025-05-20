@@ -1,6 +1,6 @@
 use color_eyre::{
     Result,
-    eyre::{WrapErr, eyre},
+    eyre::eyre,
 };
 use cpal::traits::{DeviceTrait, HostTrait};
 
