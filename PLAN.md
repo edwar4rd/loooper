@@ -27,5 +27,13 @@
 
 - Set Up
 - Prepare
+  - Audio streams are created and configured, waiting on a atomic to start the count-in.
+  - The user can adjust monitoring and click volume now.
 - CountIn
+  - After 8 beats (2 bar in 4/4 times), rolling state starts.
 - Rolling
+
+## Calculations
+
+1 second of audio with 48000Hz sample rate and in F32 format is 192kB.
+If we have 100MB of usable RAM to spare, we have 520 seconds ~= 8.6 minutes of total audio data storage.
