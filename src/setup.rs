@@ -1,5 +1,6 @@
 use color_eyre::Result;
-use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
+use crossterm::event::{Event, EventStream, KeyCode, KeyEvent, KeyEventKind};
+use futures::{FutureExt, StreamExt};
 use ratatui::{
     Frame,
     buffer::Buffer,
@@ -25,6 +26,8 @@ pub struct SetUpState {
     pub selected: usize,
     /// The list of loops.
     pub loops: Vec<LoopState>,
+    /// The event stream for receiving terminal events.
+    pub event_stream: EventStream,
 }
 
 #[derive(Debug)]
@@ -54,20 +57,26 @@ impl Default for SetUpState {
                 bar_count: 4,
                 starting: true,
             }],
+            event_stream: EventStream::new(),
         }
     }
 }
 
 impl SetUpState {
-    pub fn handle_events(&mut self) -> Result<()> {
-        match event::read()? {
-            // it's important to check that the event is a key press event as
-            // crossterm also emits key release and repeat events on Windows.
-            Event::Key(key_event) if key_event.kind == KeyEventKind::Press => {
-                self.handle_key_event(key_event)
+    pub async fn handle_events(&mut self) -> Result<()> {
+        let event = self.event_stream.next().fuse();
+        tokio::select! {
+            maybe_event = event => {
+                if let Some(event) = maybe_event {
+                    match event? {
+                        Event::Key(key_event) if key_event.kind == KeyEventKind::Press => {
+                            self.handle_key_event(key_event)
+                        }
+                        _ => {}
+                    }
+                }
             }
-            _ => {}
-        };
+        }
         Ok(())
     }
 
@@ -81,6 +90,21 @@ impl SetUpState {
 
     pub fn draw(&self, frame: &mut Frame) {
         frame.render_widget(self, frame.area());
+    }
+
+    pub fn from_rolling_state(rolling_state: crate::RollingState) -> Self {
+        SetUpState {
+            mbpm: rolling_state.mbpm,
+            precision: 10000,
+            exit: false,
+            next_phase: false,
+            selected: 0,
+            loops: vec![LoopState {
+                bar_count: 4,
+                starting: true,
+            }],
+            event_stream: rolling_state.event_stream,
+        }
     }
 }
 

@@ -26,42 +26,32 @@ async fn main() -> Result<()> {
         eprintln!("Is JACK started or pw-jack used?");
     })?;
     let terminal = ratatui::init();
-    let mut state = State::default();
+    let state = State::default();
 
-    let result = state.run(terminal);
+    let result = state.run(terminal).await;
     ratatui::restore();
     result
 }
 
 impl State {
-    fn run(&mut self, mut terminal: DefaultTerminal) -> Result<()> {
+    async fn run(mut self, mut terminal: DefaultTerminal) -> Result<()> {
         while !self.exiting() {
             terminal.draw(|frame| self.draw(frame))?;
-            self.handle_events()?;
+            self.handle_events().await?;
             if self.phase_changing() {
                 match self {
                     State::SetUp(state) => {
-                        *self = State::Prepare(PrepareState {
-                            mbpm: state.mbpm,
-                            exit: false,
-                            next_phase: false,
-                        })
+                        self = State::Prepare(PrepareState::from_setup_state(state))
                     }
                     State::Prepare(state) => {
-                        *self = State::CountIn(CountInState {
-                            mbpm: state.mbpm,
-                            exit: false,
-                            next_phase: false,
-                        })
+                        self = State::CountIn(CountInState::from_prepare_state(state))
                     }
                     State::CountIn(state) => {
-                        *self = State::Rolling(RollingState {
-                            mbpm: state.mbpm,
-                            exit: false,
-                            next_phase: false,
-                        })
+                        self = State::Rolling(RollingState::from_countin_state(state))
                     }
-                    State::Rolling(_) => *self = State::SetUp(SetUpState::default()),
+                    State::Rolling(state) => {
+                        self = State::SetUp(SetUpState::from_rolling_state(state))
+                    }
                 }
             }
         }
@@ -77,12 +67,12 @@ impl State {
         }
     }
 
-    fn handle_events(&mut self) -> Result<()> {
+    async fn handle_events(&mut self) -> Result<()> {
         match self {
-            State::SetUp(state) => state.handle_events(),
-            State::Prepare(state) => state.handle_events(),
-            State::CountIn(state) => state.handle_events(),
-            State::Rolling(state) => state.handle_events(),
+            State::SetUp(state) => state.handle_events().await,
+            State::Prepare(state) => state.handle_events().await,
+            State::CountIn(state) => state.handle_events().await,
+            State::Rolling(state) => state.handle_events().await,
         }
     }
 
