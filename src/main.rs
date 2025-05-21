@@ -1,5 +1,4 @@
 use color_eyre::Result;
-use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
 use loooper::{CountInState, PrepareState, RollingState, SetUpState, audio};
 use ratatui::{DefaultTerminal, Frame};
 
@@ -17,7 +16,8 @@ impl Default for State {
     }
 }
 
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     color_eyre::install().inspect_err(|_| {
         eprintln!("Failed to install color_eyre");
     })?;
@@ -62,12 +62,7 @@ impl State {
                         })
                     }
                     State::Rolling(state) => {
-                        *self = State::SetUp(SetUpState {
-                            mbpm: state.mbpm,
-                            precision: 10000,
-                            exit: false,
-                            next_phase: false,
-                        })
+                        *self = State::SetUp(SetUpState::default())
                     }
                 }
             }

@@ -21,6 +21,25 @@ pub struct SetUpState {
     pub exit: bool,
     /// Whether to enter the prepare phase.
     pub next_phase: bool,
+    /// The selected loop index.
+    pub selected: usize,
+    /// The list of loops.
+    pub loops: Vec<LoopState>,
+}
+
+#[derive(Debug)]
+pub struct LoopState {
+    pub bar_count: u32,
+    pub starting: bool,
+}
+
+impl Default for LoopState {
+    fn default() -> Self {
+        LoopState {
+            bar_count: 4,
+            starting: false,
+        }
+    }
 }
 
 impl Default for SetUpState {
@@ -30,6 +49,11 @@ impl Default for SetUpState {
             precision: 10000,
             exit: false,
             next_phase: false,
+            selected: 0,
+            loops: vec![LoopState {
+                bar_count: 4,
+                starting: true,
+            }],
         }
     }
 }
@@ -64,7 +88,7 @@ impl SetUpState {
     fn exit(&mut self) {
         self.exit = true;
     }
-    
+
     fn transititon(&mut self) {
         self.next_phase = true;
     }
@@ -72,11 +96,53 @@ impl SetUpState {
     fn handle_key_event(&mut self, key_event: KeyEvent) {
         match key_event.code {
             KeyCode::Char('q') => self.exit(),
-            KeyCode::Left => self.decrement_bpm(),
-            KeyCode::Right => self.increment_bpm(),
-            KeyCode::Tab => self.change_precision(),
+            KeyCode::Left => self.decrement(),
+            KeyCode::Right => self.increment(),
+            KeyCode::Up => self.select_priv(),
+            KeyCode::Down => self.select_next(),
+            KeyCode::Tab => {
+                if self.selected == 0 {
+                    self.change_precision()
+                } else {
+                    self.toggle_autostart()
+                }
+            }
             KeyCode::Char(' ') => self.transititon(),
+            KeyCode::Char('p') => panic!("Manual panic!"),
+            KeyCode::Char('l') => self.add_loop(),
             _ => {}
+        }
+    }
+
+    /// Add a new loop to the list of loops
+    fn add_loop(&mut self) {
+        if self.loops.len() >= 4 {
+            return;
+        }
+        let new_loop = LoopState {
+            bar_count: 4,
+            starting: false,
+        };
+        self.loops.push(new_loop);
+    }
+
+    fn decrement(&mut self) {
+        if self.selected == 0 {
+            self.decrement_bpm();
+        } else {
+            if let Some(loop_state) = self.loops.get_mut(self.selected - 1) {
+                loop_state.bar_count = 1.max(loop_state.bar_count - 1);
+            }
+        }
+    }
+
+    fn increment(&mut self) {
+        if self.selected == 0 {
+            self.increment_bpm();
+        } else {
+            if let Some(loop_state) = self.loops.get_mut(self.selected - 1) {
+                loop_state.bar_count = 16.min(loop_state.bar_count + 1);
+            }
         }
     }
 
@@ -101,6 +167,33 @@ impl SetUpState {
             self.precision = 10000;
         }
     }
+
+    fn select_next(&mut self) {
+        if self.selected == 0 {
+            self.selected = 1;
+        } else if self.selected >= self.loops.len() {
+            self.selected = 0;
+        } else {
+            self.selected += 1;
+        }
+    }
+
+    fn select_priv(&mut self) {
+        if self.selected == 0 {
+            self.selected = self.loops.len();
+        } else {
+            self.selected -= 1;
+        }
+    }
+
+    fn toggle_autostart(&mut self) {
+        if self.selected == 0 {
+            return;
+        }
+        if let Some(loop_state) = self.loops.get_mut(self.selected - 1) {
+            loop_state.starting = !loop_state.starting;
+        }
+    }
 }
 
 impl Widget for &SetUpState {
@@ -111,31 +204,60 @@ impl Widget for &SetUpState {
             "O".set_style(Color::Rgb(17, 85, 204)).bold().italic(),
             "O".set_style(Color::Rgb(180, 95, 6)).bold().italic(),
             "PER ".bold(),
-            "(setup) ".italic()
+            "(setup) ".italic(),
         ]);
         let instructions = Line::from(vec![
             " Decrement ".into(),
             "<Left>".blue().bold(),
             " Increment ".into(),
             "<Right>".blue().bold(),
-            " Change precision".into(),
-            format!(" (Current: {}) ", self.precision as f32 / 1000.).into(),
+            if self.selected == 0 {
+                " Precision ".into()
+            } else {
+                " Autostart ".into()
+            },
             "<Tab>".blue().bold(),
             " Quit ".into(),
             "<Q> ".blue().bold(),
         ]);
+
         let block = Block::bordered()
             .title(title.centered())
             .title_bottom(instructions.centered())
             .border_set(border::THICK);
 
         let bpm = self.mbpm as f64 / 1000.;
-        let counter_text = Text::from(vec![Line::from(vec![
+        let mut texts = Vec::new();
+        let counter_line = Line::from(vec![
+            if self.selected == 0 {
+                ">> ".green()
+            } else {
+                "".into()
+            },
             "BPM: ".into(),
             bpm.to_string().yellow(),
-        ])]);
+            format!(" (+/-{})", self.precision as f32 / 1000.).italic(),
+        ]);
+        texts.push(counter_line);
+        for (i, loop_state) in self.loops.iter().enumerate() {
+            let loop_text = Line::from(vec![
+                if self.selected == i + 1 {
+                    ">> ".green()
+                } else {
+                    "".into()
+                },
+                if loop_state.starting {
+                    "🟢".green()
+                } else {
+                    "🟥".red()
+                },
+                format!(" Loop {}: ", i + 1).into(),
+                format!("{} bars", loop_state.bar_count).yellow(),
+            ]);
+            texts.push(loop_text);
+        }
 
-        Paragraph::new(counter_text)
+        Paragraph::new(Text::from(texts))
             .centered()
             .block(block)
             .render(area, buf);
