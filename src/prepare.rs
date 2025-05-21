@@ -103,7 +103,12 @@ impl Widget for &PrepareState {
             "PER ".bold(),
             "(prepare) ".italic(),
         ]);
-        let instructions = Line::from(vec![" Quit ".into(), "<Q> ".blue().bold()]);
+        let instructions = Line::from(vec![
+            " Quit ".into(),
+            "<Q> ".blue().bold(),
+            " Start Count-in ".into(),
+            "<Space>".blue().bold(),
+        ]);
         let block = Block::bordered()
             .title(title.centered())
             .title_bottom(instructions.centered())

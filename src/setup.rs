@@ -32,14 +32,14 @@ pub struct SetUpState {
 
 #[derive(Debug)]
 pub struct LoopState {
-    pub bar_count: u32,
+    pub beat_count: u32,
     pub starting: bool,
 }
 
 impl Default for LoopState {
     fn default() -> Self {
         LoopState {
-            bar_count: 4,
+            beat_count: 4,
             starting: false,
         }
     }
@@ -54,7 +54,7 @@ impl Default for SetUpState {
             next_phase: false,
             selected: 0,
             loops: vec![LoopState {
-                bar_count: 4,
+                beat_count: 4,
                 starting: true,
             }],
             event_stream: EventStream::new(),
@@ -100,7 +100,7 @@ impl SetUpState {
             next_phase: false,
             selected: 0,
             loops: vec![LoopState {
-                bar_count: 4,
+                beat_count: 4,
                 starting: true,
             }],
             event_stream: rolling_state.event_stream,
@@ -140,11 +140,11 @@ impl SetUpState {
 
     /// Add a new loop to the list of loops
     fn add_loop(&mut self) {
-        if self.loops.len() >= 4 {
+        if self.loops.len() >= 8 {
             return;
         }
         let new_loop = LoopState {
-            bar_count: 4,
+            beat_count: 4,
             starting: false,
         };
         self.loops.push(new_loop);
@@ -154,7 +154,7 @@ impl SetUpState {
         if self.selected == 0 {
             self.decrement_bpm();
         } else if let Some(loop_state) = self.loops.get_mut(self.selected - 1) {
-            loop_state.bar_count = 1.max(loop_state.bar_count - 1);
+            loop_state.beat_count = 1.max(loop_state.beat_count - 1);
         }
     }
 
@@ -162,7 +162,7 @@ impl SetUpState {
         if self.selected == 0 {
             self.increment_bpm();
         } else if let Some(loop_state) = self.loops.get_mut(self.selected - 1) {
-            loop_state.bar_count = 16.min(loop_state.bar_count + 1);
+            loop_state.beat_count = 16.min(loop_state.beat_count + 1);
         }
     }
 
@@ -227,16 +227,16 @@ impl Widget for &SetUpState {
             "(setup) ".italic(),
         ]);
         let instructions = Line::from(vec![
-            " Decrement ".into(),
-            "<Left>".blue().bold(),
-            " Increment ".into(),
-            "<Right>".blue().bold(),
             if self.selected == 0 {
                 " Precision ".into()
             } else {
                 " Autostart ".into()
             },
             "<Tab>".blue().bold(),
+            " Add Loop ".into(),
+            "<L>".blue().bold(),
+            " Finish Setup ".into(),
+            "<Space>".blue().bold(),
             " Quit ".into(),
             "<Q> ".blue().bold(),
         ]);
@@ -272,7 +272,7 @@ impl Widget for &SetUpState {
                     "🟥".red()
                 },
                 format!(" Loop {}: ", i + 1).into(),
-                format!("{} bars", loop_state.bar_count).yellow(),
+                format!("{} beats", loop_state.beat_count).yellow(),
             ]);
             texts.push(loop_text);
         }
