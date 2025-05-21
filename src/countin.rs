@@ -61,7 +61,7 @@ impl CountInState {
     fn exit(&mut self) {
         self.exit = true;
     }
-    
+
     fn transititon(&mut self) {
         self.next_phase = true;
     }
@@ -85,10 +85,7 @@ impl Widget for &CountInState {
             "PER ".bold(),
             "(countin) ".italic(),
         ]);
-        let instructions = Line::from(vec![
-            " Quit ".into(),
-            "<Q> ".blue().bold(),
-        ]);
+        let instructions = Line::from(vec![" Quit ".into(), "<Q> ".blue().bold()]);
         let block = Block::bordered()
             .title(title.centered())
             .title_bottom(instructions.centered())

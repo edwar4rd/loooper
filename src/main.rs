@@ -61,9 +61,7 @@ impl State {
                             next_phase: false,
                         })
                     }
-                    State::Rolling(state) => {
-                        *self = State::SetUp(SetUpState::default())
-                    }
+                    State::Rolling(_) => *self = State::SetUp(SetUpState::default()),
                 }
             }
         }

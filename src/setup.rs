@@ -129,20 +129,16 @@ impl SetUpState {
     fn decrement(&mut self) {
         if self.selected == 0 {
             self.decrement_bpm();
-        } else {
-            if let Some(loop_state) = self.loops.get_mut(self.selected - 1) {
-                loop_state.bar_count = 1.max(loop_state.bar_count - 1);
-            }
+        } else if let Some(loop_state) = self.loops.get_mut(self.selected - 1) {
+            loop_state.bar_count = 1.max(loop_state.bar_count - 1);
         }
     }
 
     fn increment(&mut self) {
         if self.selected == 0 {
             self.increment_bpm();
-        } else {
-            if let Some(loop_state) = self.loops.get_mut(self.selected - 1) {
-                loop_state.bar_count = 16.min(loop_state.bar_count + 1);
-            }
+        } else if let Some(loop_state) = self.loops.get_mut(self.selected - 1) {
+            loop_state.bar_count = 16.min(loop_state.bar_count + 1);
         }
     }
 

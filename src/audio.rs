@@ -1,7 +1,4 @@
-use color_eyre::{
-    Result,
-    eyre::eyre,
-};
+use color_eyre::{Result, eyre::eyre};
 use cpal::traits::{DeviceTrait, HostTrait};
 
 pub fn host_device_setup() -> Result<(
