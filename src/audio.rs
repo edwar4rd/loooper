@@ -108,6 +108,7 @@ pub fn create_audio_streams(
     }
 
     let enabled_clone = enabled.clone();
+    let tx_clone = tx.clone();
     let input_data_fn = move |data: &[f32], _: &cpal::InputCallbackInfo| {
         if !enabled_clone.load(std::sync::atomic::Ordering::Relaxed) {
             return;
@@ -120,13 +121,22 @@ pub fn create_audio_streams(
             }
         }
         if output_fell_behind {
+            let _ = tx_clone.send("output stream fell behind: try increasing latency".into());
             // eprintln!("output stream fell behind: try increasing latency");
         }
     };
 
-    fn err_fn(err: cpal::StreamError) {
+    let tx_clone = tx.clone();
+    let err_fn = move |err: cpal::StreamError| {
+        let _ = tx_clone.send(format!("an error occurred on stream: {}", err));
         // eprintln!("an error occurred on stream: {}", err);
-    }
+    };
+
+    let tx_clone = tx.clone();
+    let err_fn_2 = move |err: cpal::StreamError| {
+        let _ = tx_clone.send(format!("an error occurred on stream: {}", err));
+        // eprintln!("an error occurred on stream: {}", err);
+    };
 
     let output_data_fn = move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
         if !enabled.load(std::sync::atomic::Ordering::Relaxed) {
@@ -147,18 +157,14 @@ pub fn create_audio_streams(
             };
         }
         if input_fell_behind {
+            let _ = tx.send("input stream fell behind: try increasing latency".into());
             // eprintln!("input stream fell behind: try increasing latency");
         }
     };
 
-    let input_stream =
-        input_device.build_input_stream(&supported_config.config(), input_data_fn, err_fn, None)?;
-    let output_stream = output_device.build_output_stream(
-        &supported_config.config(),
-        output_data_fn,
-        err_fn,
-        None,
-    )?;
+    let input_stream = input_device.build_input_stream(&config, input_data_fn, err_fn, None)?;
+    let output_stream =
+        output_device.build_output_stream(&config, output_data_fn, err_fn_2, None)?;
     println!("Successfully built streams.");
     Ok((input_stream, output_stream, state))
 }

@@ -32,6 +32,10 @@ pub struct SetUpState {
     pub event_stream: EventStream,
     /// The audio state.
     pub audio_state: AudioState,
+    /// The serial number of the last error.
+    error_count: usize,
+    /// The last error message.
+    last_error: String,
 }
 
 #[derive(Debug)]
@@ -63,6 +67,8 @@ impl SetUpState {
             }],
             event_stream: EventStream::new(),
             audio_state,
+            error_count: 0,
+            last_error: String::new(),
         }
     }
 
@@ -77,6 +83,12 @@ impl SetUpState {
                         }
                         _ => {}
                     }
+                }
+            }
+            maybe_error = self.audio_state.errors.recv() => {
+                if let Some(error) = maybe_error {
+                    self.last_error = error;
+                    self.error_count += 1;
                 }
             }
         }
@@ -112,6 +124,8 @@ impl SetUpState {
             }],
             event_stream: rolling_state.event_stream,
             audio_state: rolling_state.audio_state,
+            error_count: 0,
+            last_error: String::new(),
         }
     }
 }
@@ -284,6 +298,10 @@ impl Widget for &SetUpState {
             ]);
             texts.push(loop_text);
         }
+        texts.push(Line::from(vec![
+            format!("Error #{}: ", self.error_count).into(),
+            self.last_error.as_str().into(),
+        ]));
 
         Paragraph::new(Text::from(texts))
             .centered()
