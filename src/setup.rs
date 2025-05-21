@@ -12,6 +12,8 @@ use ratatui::{
     widgets::{Block, Paragraph, Widget},
 };
 
+use crate::audio::AudioState;
+
 #[derive(Debug)]
 pub struct SetUpState {
     /// The beats per minute (BPM).
@@ -28,6 +30,8 @@ pub struct SetUpState {
     pub loops: Vec<LoopState>,
     /// The event stream for receiving terminal events.
     pub event_stream: EventStream,
+    /// The audio state.
+    pub audio_state: AudioState,
 }
 
 #[derive(Debug)]
@@ -45,8 +49,8 @@ impl Default for LoopState {
     }
 }
 
-impl Default for SetUpState {
-    fn default() -> Self {
+impl SetUpState {
+    pub fn default_with_audio_state(audio_state: crate::audio::AudioState) -> Self {
         SetUpState {
             mbpm: 120000,
             precision: 10000,
@@ -58,11 +62,10 @@ impl Default for SetUpState {
                 starting: true,
             }],
             event_stream: EventStream::new(),
+            audio_state,
         }
     }
-}
 
-impl SetUpState {
     pub async fn handle_events(&mut self) -> Result<()> {
         let event = self.event_stream.next().fuse();
         tokio::select! {
@@ -93,6 +96,10 @@ impl SetUpState {
     }
 
     pub fn from_rolling_state(rolling_state: crate::RollingState) -> Self {
+        rolling_state
+            .audio_state
+            .enabled
+            .store(false, std::sync::atomic::Ordering::Relaxed);
         SetUpState {
             mbpm: rolling_state.mbpm,
             precision: 10000,
@@ -104,6 +111,7 @@ impl SetUpState {
                 starting: true,
             }],
             event_stream: rolling_state.event_stream,
+            audio_state: rolling_state.audio_state,
         }
     }
 }

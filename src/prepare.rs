@@ -12,6 +12,8 @@ use ratatui::{
     widgets::{Block, Paragraph, Widget},
 };
 
+use crate::audio::AudioState;
+
 #[derive(Debug)]
 pub struct PrepareState {
     /// The beats per minute (BPM).
@@ -22,17 +24,8 @@ pub struct PrepareState {
     pub next_phase: bool,
     /// The event stream for receiving terminal events.
     pub event_stream: EventStream,
-}
-
-impl Default for PrepareState {
-    fn default() -> Self {
-        PrepareState {
-            mbpm: 120000,
-            exit: false,
-            next_phase: false,
-            event_stream: EventStream::new(),
-        }
-    }
+    /// The audio state.
+    pub audio_state: AudioState,
 }
 
 impl PrepareState {
@@ -66,11 +59,16 @@ impl PrepareState {
     }
 
     pub fn from_setup_state(setup_state: crate::SetUpState) -> Self {
+        setup_state
+            .audio_state
+            .enabled
+            .store(true, std::sync::atomic::Ordering::Relaxed);
         PrepareState {
             mbpm: setup_state.mbpm,
             exit: false,
             next_phase: false,
             event_stream: setup_state.event_stream,
+            audio_state: setup_state.audio_state,
         }
     }
 }

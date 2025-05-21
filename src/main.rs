@@ -10,23 +10,23 @@ pub enum State {
     Rolling(RollingState),
 }
 
-impl Default for State {
-    fn default() -> Self {
-        State::SetUp(SetUpState::default())
-    }
-}
-
 #[tokio::main]
 async fn main() -> Result<()> {
     color_eyre::install().inspect_err(|_| {
         eprintln!("Failed to install color_eyre");
     })?;
-    let _ = audio::host_device_setup().inspect_err(|err| {
-        eprintln!("Failed to setup audio host device: {}", err);
-        eprintln!("Is JACK started or pw-jack used?");
-    })?;
+    let (audio_host, audio_config, input_device, output_device) = audio::host_device_setup()
+        .inspect_err(|err| {
+            eprintln!("Failed to setup audio host device: {}", err);
+            eprintln!("Is JACK started or pw-jack used?");
+        })?;
+    let (input_stream, output_stream, audio_state) =
+        audio::create_audio_streams(audio_host, audio_config, input_device, output_device)
+            .inspect_err(|err| {
+                eprintln!("Failed to create audio streams: {}", err);
+            })?;
     let terminal = ratatui::init();
-    let state = State::default();
+    let state = State::default_with_audio_state(audio_state);
 
     let result = state.run(terminal).await;
     ratatui::restore();
@@ -34,6 +34,10 @@ async fn main() -> Result<()> {
 }
 
 impl State {
+    fn default_with_audio_state(audio_state: audio::AudioState) -> Self {
+        State::SetUp(SetUpState::default_with_audio_state(audio_state))
+    }
+
     async fn run(mut self, mut terminal: DefaultTerminal) -> Result<()> {
         while !self.exiting() {
             terminal.draw(|frame| self.draw(frame))?;

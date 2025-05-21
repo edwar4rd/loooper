@@ -12,6 +12,8 @@ use ratatui::{
     widgets::{Block, Paragraph, Widget},
 };
 
+use crate::audio::AudioState;
+
 #[derive(Debug)]
 pub struct RollingState {
     /// The beats per minute (BPM).
@@ -22,17 +24,8 @@ pub struct RollingState {
     pub next_phase: bool,
     /// The event stream for receiving terminal events.
     pub event_stream: EventStream,
-}
-
-impl Default for RollingState {
-    fn default() -> Self {
-        RollingState {
-            mbpm: 120000,
-            exit: false,
-            next_phase: false,
-            event_stream: EventStream::new(),
-        }
-    }
+    /// The audio state.
+    pub audio_state: AudioState,
 }
 
 impl RollingState {
@@ -71,6 +64,7 @@ impl RollingState {
             exit: false,
             next_phase: false,
             event_stream: countin_state.event_stream,
+            audio_state: countin_state.audio_state,
         }
     }
 }
