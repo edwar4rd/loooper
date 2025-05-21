@@ -94,7 +94,7 @@ pub fn create_audio_streams(
     // Create a delay in case the input and output devices aren't synced.
     // let latency_frames = (1000.0 / 1_000.0) * config.sample_rate().0 as f32;
     // let latency_samples = latency_frames as usize * config.channels() as usize;
-    let latency_samples = buffer_size as usize * supported_config.channels() as usize;
+    let latency_samples = buffer_size as usize * config.channels as usize;
 
     // The buffer to share samples
     let ring = HeapRb::<f32>::new(latency_samples * 2);
@@ -106,6 +106,16 @@ pub fn create_audio_streams(
         // so this should never fail
         producer.try_push(0.0).unwrap();
     }
+
+    let tx_clone = tx.clone();
+    let err_fn = move |err: cpal::StreamError| {
+        let _ = tx_clone.send(format!("an error occurred on stream: {}", err));
+    };
+
+    let tx_clone = tx.clone();
+    let err_fn_2 = move |err: cpal::StreamError| {
+        let _ = tx_clone.send(format!("an error occurred on stream: {}", err));
+    };
 
     let enabled_clone = enabled.clone();
     let tx_clone = tx.clone();
@@ -122,43 +132,58 @@ pub fn create_audio_streams(
         }
         if output_fell_behind {
             let _ = tx_clone.send("output stream fell behind: try increasing latency".into());
-            // eprintln!("output stream fell behind: try increasing latency");
         }
     };
 
-    let tx_clone = tx.clone();
-    let err_fn = move |err: cpal::StreamError| {
-        let _ = tx_clone.send(format!("an error occurred on stream: {}", err));
-        // eprintln!("an error occurred on stream: {}", err);
-    };
-
-    let tx_clone = tx.clone();
-    let err_fn_2 = move |err: cpal::StreamError| {
-        let _ = tx_clone.send(format!("an error occurred on stream: {}", err));
-        // eprintln!("an error occurred on stream: {}", err);
-    };
-
+    let mut audio_clock: u128 = 0;
+    let mut last_enabled = false;
+    let mbpm_clone = mbpm.clone();
     let output_data_fn = move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
         if !enabled.load(std::sync::atomic::Ordering::Relaxed) {
             for sample in data {
                 *sample = 0.0;
             }
+            last_enabled = false;
             return;
         }
 
+        if !last_enabled {
+            audio_clock = 0;
+        }
+        last_enabled = true;
+
         let mut input_fell_behind = false;
-        for sample in data {
-            *sample = match consumer.try_pop() {
-                Some(s) => s,
-                None => {
-                    input_fell_behind = true;
-                    0.0
-                }
+
+        let mbpm = mbpm_clone.load(std::sync::atomic::Ordering::Relaxed);
+        let spb = 60.0 / mbpm as f32 * 1000.0;
+
+        for frame in data.chunks_mut(config.channels as usize) {
+            let vol = if ((audio_clock as f32 / config.sample_rate.0 as f32) / spb % 1.) < 0.125 {
+                (1f32).min(((audio_clock as f32 / config.sample_rate.0 as f32) / spb % 1.) * 100.)
+            } else {
+                (0f32).max(
+                    1. - (((audio_clock as f32 / config.sample_rate.0 as f32) / spb % 1.) - 0.125)
+                        * 10.,
+                )
             };
+            let wave = (audio_clock as f32 * 523.25 * 2.0 * std::f32::consts::PI
+                / config.sample_rate.0 as f32)
+                .sin()
+                * 0.2;
+            let amp = vol * wave;
+            for sample in frame.iter_mut() {
+                *sample = match consumer.try_pop() {
+                    Some(s) => s + amp,
+                    None => {
+                        input_fell_behind = true;
+                        0.0
+                    }
+                };
+            }
+            audio_clock += 1;
         }
         if input_fell_behind {
             let _ = tx.send("input stream fell behind: try increasing latency".into());
-            // eprintln!("input stream fell behind: try increasing latency");
         }
     };
 

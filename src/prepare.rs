@@ -63,6 +63,10 @@ impl PrepareState {
             .audio_state
             .enabled
             .store(true, std::sync::atomic::Ordering::Relaxed);
+        setup_state
+            .audio_state
+            .mbpm
+            .store(setup_state.mbpm, std::sync::atomic::Ordering::Relaxed);
         PrepareState {
             mbpm: setup_state.mbpm,
             exit: false,
