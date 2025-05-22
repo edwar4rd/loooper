@@ -97,7 +97,12 @@ impl Widget for &RollingState {
             "PER ".bold(),
             "(rolling) ".italic(),
         ]);
-        let instructions = Line::from(vec![" Quit ".into(), "<Q> ".blue().bold()]);
+        let instructions = Line::from(vec![
+            " Reset Loooper ".into(),
+            "<Space>".blue().bold(),
+            " Quit ".into(),
+            "<Q> ".blue().bold(),
+        ]);
         let block = Block::bordered()
             .title(title.centered())
             .title_bottom(instructions.centered())
