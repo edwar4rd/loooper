@@ -22,17 +22,10 @@ pub fn audio_setup() -> Result<(
     let (rolling_tx, rolling_rx) = tokio::sync::mpsc::unbounded_channel();
     let mbpm = Arc::new(AtomicU32::new(120));
     let (message_tx, message_rx) = tokio::sync::mpsc::unbounded_channel();
-    let loop_length = (0..8).map(|_| Arc::from(AtomicU32::new(4))).collect();
-    let loop_starting = (0..8).map(|_| Arc::from(AtomicBool::new(false))).collect();
-    let loop_layering = (0..8).map(|_| Arc::from(AtomicBool::new(false))).collect();
-    let loop_playing = (0..8).map(|_| Arc::from(AtomicBool::new(false))).collect();
-    let loop_buffers = (0..8)
-        .map(|_| {
-            let mut buf_vec = Vec::<f32>::with_capacity(client.sample_rate() * 2 * 17);
-            buf_vec.resize(client.sample_rate() * 2 * 17, 0.0);
-            buf_vec.into_boxed_slice()
-        })
-        .collect::<Vec<_>>();
+    let loop_length: Vec<_> = (0..8).map(|_| Arc::from(AtomicU32::new(4))).collect();
+    let loop_starting: Vec<_> = (0..8).map(|_| Arc::from(AtomicBool::new(false))).collect();
+    let loop_layering: Vec<_> = (0..8).map(|_| Arc::from(AtomicBool::new(false))).collect();
+    let loop_playing: Vec<_> = (0..8).map(|_| Arc::from(AtomicBool::new(false))).collect();
     let current_millibeat = Arc::new(AtomicU32::new(0));
 
     let mut audio_clock: u64 = 0; // using u32 should panic in about a day
@@ -52,6 +45,22 @@ pub fn audio_setup() -> Result<(
     let current_millibeat_clone = current_millibeat.clone();
     let mut current_beat = 0; // Which milli beat we're in, start at beat 1.0 -> 1000, including the count-in
     // let tx_clone = tx.clone();
+    let mut loop_buffers = (0..8)
+        .map(|_| {
+            let mut buf_vec = Vec::<f32>::with_capacity(client.sample_rate() * 2 * 17);
+            buf_vec.resize(client.sample_rate() * 2 * 17, 0.0);
+            buf_vec.into_boxed_slice()
+        })
+        .collect::<Vec<_>>();
+    let mut loop_filled = [false; 8];
+    let mut loop_recording = [false; 8];
+    let mut loop_looping = [false; 8];
+    let mut loop_pos = [0usize; 8];
+    let loop_length_clone = loop_length.clone();
+    let loop_starting_clone = loop_starting.clone();
+    let loop_playing_clone = loop_playing.clone();
+    let mut loop_recording_start_beat = [0; 8];
+
     let process_callback = move |client: &jack::Client, ps: &jack::ProcessScope| {
         let sample_rate = client.sample_rate() as u64;
         let in_port = in_port.as_slice(ps);
@@ -116,6 +125,7 @@ pub fn audio_setup() -> Result<(
                         countin_started = false;
                         let _ = rolling_tx.send(());
                         rolling = true;
+                        current_beat = 1;
                         440.0
                     } else {
                         countin_left -= 1;
@@ -135,6 +145,49 @@ pub fn audio_setup() -> Result<(
                 } else {
                     0.2
                 };
+
+                if rolling {
+                    // Set up loop recording and playback states
+                    for index in 0..8 {
+                        let length =
+                            loop_length_clone[index].load(std::sync::atomic::Ordering::Relaxed);
+                        if !match length {
+                            0 => false,
+                            1 => true,
+                            2 => current_beat % 2 == 1,
+                            3..=4 => current_beat % 4 == 1,
+                            5..=8 => current_beat % 8 == 1,
+                            9..=16 => current_beat % 16 == 1,
+                            _ => current_beat == 1,
+                        } {
+                            continue;
+                        }
+
+                        if loop_recording[index]
+                            && (current_beat - loop_recording_start_beat[index]) >= length
+                        {
+                            // recording ended, start looping
+                            loop_filled[index] = true;
+                            loop_recording[index] = false;
+                            loop_looping[index] = true;
+                        }
+
+                        if loop_starting_clone[index].load(std::sync::atomic::Ordering::Relaxed) {
+                            if loop_filled[index] {
+                                loop_looping[index] = true;
+                            } else {
+                                loop_recording[index] = true;
+                                loop_recording_start_beat[index] = current_beat;
+                            }
+                        } else if loop_filled[index] {
+                            loop_looping[index] = false;
+                        }
+
+                        if loop_looping[index] {
+                            loop_pos[index] = 0;
+                        }
+                    }
+                }
             }
             last_beat_pos = beat_pos;
 
@@ -156,6 +209,20 @@ pub fn audio_setup() -> Result<(
                 let wave = phase.sin() * click_vol;
                 let amp = vol * wave;
                 *out_sample += amp;
+            }
+
+            for index in 0..8 {
+                if loop_looping[index] {
+                    *out_sample += loop_buffers[index][loop_pos[index]];
+                }
+
+                if loop_recording[index] {
+                    loop_buffers[index][loop_pos[index]] = *in_sample;
+                }
+
+                if loop_looping[index] || loop_recording[index] {
+                    loop_pos[index] += 1;
+                }
             }
 
             audio_clock += 1;

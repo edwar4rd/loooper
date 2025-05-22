@@ -156,8 +156,7 @@ impl Widget for &RollingState {
         let current_millibeat = self
             .audio_state
             .current_millibeat
-            .load(std::sync::atomic::Ordering::Relaxed)
-            - 8000;
+            .load(std::sync::atomic::Ordering::Relaxed);
         let mut texts = vec![Line::from(vec![
             "BPM: ".into(),
             bpm.to_string().yellow(),
