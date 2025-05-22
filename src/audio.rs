@@ -16,6 +16,14 @@ pub fn audio_setup() -> Result<(
     let in_port = client.register_port("loooper_in", jack::AudioIn::default())?;
     let mut out_port = client.register_port("loooper_out", jack::AudioOut::default())?;
 
+    let enabled = Arc::new(AtomicBool::new(false));
+    let mbpm = Arc::new(AtomicU32::new(120));
+    let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+    let loop_length = (0..8).map(|_| Arc::from(AtomicU32::new(4))).collect();
+    let loop_starting = (0..8).map(|_| Arc::from(AtomicBool::new(false))).collect();
+    let loop_layering = (0..8).map(|_| Arc::from(AtomicBool::new(false))).collect();
+    let loop_playing = (0..8).map(|_| Arc::from(AtomicBool::new(false))).collect();
+
     let process_callback = move |_: &jack::Client, ps: &jack::ProcessScope| {
         let in_port = in_port.as_slice(ps);
         let out_port = out_port.as_mut_slice(ps);
@@ -27,42 +35,35 @@ pub fn audio_setup() -> Result<(
 
     let active_client = client.activate_async(Notifications, process)?;
 
-    let src_ports = active_client.as_client().ports(
-        None,
-        Some("32 bit float mono audio"),
-        PortFlags::IS_OUTPUT.union(PortFlags::IS_PHYSICAL),
-    );
-    if let Some(port) = src_ports.first() {
-        active_client
-            .as_client()
-            .connect_ports_by_name(port.as_str(), "loooper:loooper_in")
-            .unwrap();
+    {
+        let src_ports = active_client.as_client().ports(
+            None,
+            Some("32 bit float mono audio"),
+            PortFlags::IS_OUTPUT.union(PortFlags::IS_PHYSICAL),
+        );
+        if let Some(port) = src_ports.first() {
+            active_client
+                .as_client()
+                .connect_ports_by_name(port.as_str(), "loooper:loooper_in")
+                .unwrap();
+        }
+
+        let dest_ports = active_client.as_client().ports(
+            None,
+            Some("32 bit float mono audio"),
+            PortFlags::IS_INPUT.union(PortFlags::IS_PHYSICAL),
+        );
+        for port in &dest_ports {
+            active_client
+                .as_client()
+                .connect_ports_by_name("loooper:loooper_out", port.as_str())
+                .unwrap();
+        }
     }
-
-    let dest_ports = active_client.as_client().ports(
-        None,
-        Some("32 bit float mono audio"),
-        PortFlags::IS_INPUT.union(PortFlags::IS_PHYSICAL),
-    );
-    for port in &dest_ports {
-        active_client
-            .as_client()
-            .connect_ports_by_name("loooper:loooper_out", port.as_str())
-            .unwrap();
-    }
-
-    let enabled = Arc::new(AtomicBool::new(false));
-    let mbpm = Arc::new(AtomicU32::new(120));
-    let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
-
-    let loop_length = (0..8).map(|_| Arc::from(AtomicU32::new(4))).collect();
-    let loop_starting = (0..8).map(|_| Arc::from(AtomicBool::new(false))).collect();
-    let loop_layering = (0..8).map(|_| Arc::from(AtomicBool::new(false))).collect();
-    let loop_playing = (0..8).map(|_| Arc::from(AtomicBool::new(false))).collect();
 
     let state = AudioState {
-        enabled: enabled.clone(),
-        mbpm: mbpm.clone(),
+        enabled,
+        mbpm,
         errors: rx,
         loop_length,
         loop_starting,
