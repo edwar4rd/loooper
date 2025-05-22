@@ -19,8 +19,9 @@ pub fn audio_setup() -> Result<(
     let enabled = Arc::new(AtomicBool::new(false));
     let countin = Arc::new(AtomicBool::new(false));
     let countin_length = Arc::new(AtomicU32::new(0));
+    let (rolling_tx, rolling_rx) = tokio::sync::mpsc::unbounded_channel();
     let mbpm = Arc::new(AtomicU32::new(120));
-    let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+    let (message_tx, message_rx) = tokio::sync::mpsc::unbounded_channel();
     let loop_length = (0..8).map(|_| Arc::from(AtomicU32::new(4))).collect();
     let loop_starting = (0..8).map(|_| Arc::from(AtomicBool::new(false))).collect();
     let loop_layering = (0..8).map(|_| Arc::from(AtomicBool::new(false))).collect();
@@ -76,15 +77,18 @@ pub fn audio_setup() -> Result<(
             if beat_pos < last_beat_pos {
                 // Reset the adsr for metronome
                 adsr.reset();
-                if countin_left == 0 {
-                    countin_started = false;
-                }
                 click_freq = if countin_started {
-                    countin_left -= 1;
-                    if countin_left % 4 == 3 {
-                        523.25
+                    if countin_left == 0 {
+                        countin_started = false;
+                        let _ = rolling_tx.send(());
+                        440.0
                     } else {
-                        523.25 / 2.0
+                        countin_left -= 1;
+                        if countin_left % 4 == 3 {
+                            523.25
+                        } else {
+                            523.25 / 2.0
+                        }
                     }
                 } else {
                     440.0
@@ -113,7 +117,7 @@ pub fn audio_setup() -> Result<(
     };
     let process = jack::contrib::ClosureProcessHandler::new(process_callback);
 
-    let tx_clone = tx.clone();
+    let tx_clone = message_tx.clone();
     let active_client = client.activate_async(Notifications { tx: tx_clone }, process)?;
 
     {
@@ -146,8 +150,9 @@ pub fn audio_setup() -> Result<(
         enabled,
         countin,
         countin_length,
+        started_rolling: rolling_rx,
         mbpm,
-        errors: rx,
+        messages: message_rx,
         loop_length,
         loop_starting,
         loop_layering,
@@ -171,15 +176,16 @@ fn test_host_device_setup() {
 
 #[derive(Debug)]
 pub struct AudioState {
-    pub enabled: Arc<AtomicBool>,                // Main -> Audio
-    pub countin: Arc<AtomicBool>,                // Main -> Audio
-    pub countin_length: Arc<AtomicU32>,          // Main -> Audio
-    pub mbpm: Arc<AtomicU32>,                    // Main -> Audio
-    pub errors: mpsc::UnboundedReceiver<String>, // Audio -> Main
-    pub loop_length: Vec<Arc<AtomicU32>>,        // Main -> Audio
-    pub loop_starting: Vec<Arc<AtomicBool>>,     // Main -> Audio
-    pub loop_layering: Vec<Arc<AtomicBool>>,     // Main -> Audio
-    pub loop_playing: Vec<Arc<AtomicBool>>,      // Audio -> Main
+    pub enabled: Arc<AtomicBool>,                     // Main -> Audio
+    pub countin: Arc<AtomicBool>,                     // Main -> Audio
+    pub countin_length: Arc<AtomicU32>,               // Main -> Audio
+    pub started_rolling: mpsc::UnboundedReceiver<()>, // Audio -> Main
+    pub mbpm: Arc<AtomicU32>,                         // Main -> Audio
+    pub messages: mpsc::UnboundedReceiver<String>,    // Audio -> Main
+    pub loop_length: Vec<Arc<AtomicU32>>,             // Main -> Audio
+    pub loop_starting: Vec<Arc<AtomicBool>>,          // Main -> Audio
+    pub loop_layering: Vec<Arc<AtomicBool>>,          // Main -> Audio
+    pub loop_playing: Vec<Arc<AtomicBool>>,           // Audio -> Main
 }
 
 // Taken from https://github.com/RustAudio/rust-jack/blob/main/examples/playback_capture.rs

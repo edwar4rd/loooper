@@ -42,6 +42,11 @@ impl CountInState {
                     }
                 }
             }
+            maybe_started = self.audio_state.started_rolling.recv() => {
+                if let Some(()) = maybe_started {
+                    self.transititon();
+                }
+            }
         }
         Ok(())
     }

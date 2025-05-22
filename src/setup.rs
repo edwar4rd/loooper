@@ -91,7 +91,7 @@ impl SetUpState {
                     }
                 }
             }
-            maybe_error = self.audio_state.errors.recv() => {
+            maybe_error = self.audio_state.messages.recv() => {
                 if let Some(error) = maybe_error {
                     self.last_error = error;
                     self.error_count += 1;
