@@ -12,7 +12,7 @@ use ratatui::{
     widgets::{Block, Paragraph, Widget},
 };
 
-use crate::audio::AudioState;
+use crate::{audio::AudioState, loops::LoopState};
 
 #[derive(Debug)]
 pub struct PrepareState {
@@ -22,6 +22,8 @@ pub struct PrepareState {
     pub exit: bool,
     /// Whether to enter the prepare phase.
     pub next_phase: bool,
+    /// The list of loops.
+    pub loops: Vec<LoopState>,
     /// The event stream for receiving terminal events.
     pub event_stream: EventStream,
     /// The audio state.
@@ -71,6 +73,7 @@ impl PrepareState {
             mbpm: setup_state.mbpm,
             exit: false,
             next_phase: false,
+            loops: setup_state.loops,
             event_stream: setup_state.event_stream,
             audio_state: setup_state.audio_state,
         }
@@ -95,6 +98,18 @@ impl PrepareState {
     }
 
     fn start_countin(&mut self) {
+        for (index, loop_state) in self.loops.iter().enumerate() {
+            self.audio_state.loop_length[index]
+                .store(loop_state.beat_count, std::sync::atomic::Ordering::Relaxed);
+            self.audio_state.loop_starting[index]
+                .store(loop_state.starting, std::sync::atomic::Ordering::Relaxed);
+            self.audio_state.loop_layering[index]
+                .store(loop_state.layering, std::sync::atomic::Ordering::Relaxed);
+        }
+        for index in self.loops.len()..8 {
+            self.audio_state.loop_starting[index]
+                .store(false, std::sync::atomic::Ordering::Relaxed);
+        }
         self.audio_state
             .countin_length
             .store(8, std::sync::atomic::Ordering::Relaxed);

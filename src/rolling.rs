@@ -12,7 +12,7 @@ use ratatui::{
     widgets::{Block, Paragraph, Widget},
 };
 
-use crate::audio::AudioState;
+use crate::{audio::AudioState, loops::LoopState};
 
 #[derive(Debug)]
 pub struct RollingState {
@@ -22,6 +22,8 @@ pub struct RollingState {
     pub exit: bool,
     /// Whether to enter the prepare phase.
     pub next_phase: bool,
+    /// The list of loops.
+    pub loops: Vec<LoopState>,
     /// The event stream for receiving terminal events.
     pub event_stream: EventStream,
     /// The audio state.
@@ -63,6 +65,7 @@ impl RollingState {
             mbpm: countin_state.mbpm,
             exit: false,
             next_phase: false,
+            loops: countin_state.loops,
             event_stream: countin_state.event_stream,
             audio_state: countin_state.audio_state,
         }

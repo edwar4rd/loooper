@@ -1,3 +1,5 @@
+use crate::audio::AudioState;
+use crate::loops::LoopState;
 use color_eyre::Result;
 use crossterm::event::{Event, EventStream, KeyCode, KeyEvent, KeyEventKind};
 use futures::{FutureExt, StreamExt};
@@ -11,8 +13,6 @@ use ratatui::{
     text::{Line, Text},
     widgets::{Block, Paragraph, Widget},
 };
-
-use crate::audio::AudioState;
 
 #[derive(Debug)]
 pub struct SetUpState {
@@ -36,26 +36,6 @@ pub struct SetUpState {
     error_count: usize,
     /// The last error message.
     last_error: String,
-}
-
-#[derive(Debug)]
-pub struct LoopState {
-    /// The length of the loop in beats.
-    pub beat_count: u32,
-    /// Whether the loop should start immediately after count-in.
-    pub starting: bool,
-    /// Whether the loop should be layered on top of prievious recording.
-    pub layering: bool,
-}
-
-impl Default for LoopState {
-    fn default() -> Self {
-        LoopState {
-            beat_count: 4,
-            starting: false,
-            layering: false,
-        }
-    }
 }
 
 impl SetUpState {
