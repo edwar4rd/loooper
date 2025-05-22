@@ -86,7 +86,6 @@ impl CountInState {
     fn handle_key_event(&mut self, key_event: KeyEvent) {
         match key_event.code {
             KeyCode::Char('q') => self.exit(),
-            KeyCode::Char(' ') => self.transititon(),
             _ => {}
         }
     }
