@@ -202,9 +202,9 @@ impl SetUpState {
         self.mbpm = 3000000.min(self.mbpm + self.precision);
     }
 
-    /// Decrease the BPM by the current precision, while keeping the minimum bpm to 1
+    /// Decrease the BPM by the current precision, while keeping the minimum bpm to 30
     fn decrement_bpm(&mut self) {
-        self.mbpm = 1000.max(self.mbpm.saturating_sub(self.precision));
+        self.mbpm = 30000.max(self.mbpm.saturating_sub(self.precision));
     }
 
     fn change_precision(&mut self) {
