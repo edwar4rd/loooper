@@ -179,7 +179,7 @@ impl SetUpState {
         if self.selected == 0 {
             self.increment_bpm();
         } else if let Some(loop_state) = self.loops.get_mut(self.selected - 1) {
-            loop_state.beat_count = 16.min(loop_state.beat_count + 1);
+            loop_state.beat_count = 32.min(loop_state.beat_count + 1);
         }
     }
 

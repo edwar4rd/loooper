@@ -48,8 +48,8 @@ pub fn audio_setup() -> Result<(
     // let tx_clone = tx.clone();
     let mut loop_buffers = (0..8)
         .map(|_| {
-            let mut buf_vec = Vec::<f32>::with_capacity(client.sample_rate() * 2 * 17);
-            buf_vec.resize(client.sample_rate() * 2 * 17, 0.0);
+            let mut buf_vec = Vec::<f32>::with_capacity(client.sample_rate() * 2 * 33);
+            buf_vec.resize(client.sample_rate() * 2 * 33, 0.0);
             buf_vec.into_boxed_slice()
         })
         .collect::<Vec<_>>();
@@ -166,6 +166,7 @@ pub fn audio_setup() -> Result<(
                             3..=4 => current_beat % 4 == 1,
                             5..=8 => current_beat % 8 == 1,
                             9..=16 => current_beat % 16 == 1,
+                            17..=32 => current_beat % 32 == 1,
                             _ => current_beat == 1,
                         } {
                             continue;

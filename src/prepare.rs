@@ -134,12 +134,28 @@ impl Widget for &PrepareState {
             .border_set(border::THICK);
 
         let bpm = self.mbpm as f64 / 1000.;
-        let counter_text = Text::from(vec![Line::from(vec![
-            "BPM: ".into(),
-            bpm.to_string().yellow(),
-        ])]);
+        let mut texts = Vec::new();
+        let counter_line = Line::from(vec!["BPM: ".into(), bpm.to_string().yellow()]);
+        texts.push(counter_line);
+        for (i, loop_state) in self.loops.iter().enumerate() {
+            let loop_text = Line::from(vec![
+                if loop_state.starting {
+                    "🟢".green()
+                } else {
+                    "🟥".red()
+                },
+                format!(" Loop {}: ", i + 1).into(),
+                format!("{} beats, ", loop_state.beat_count).yellow(),
+                if loop_state.layering {
+                    "layering".green()
+                } else {
+                    "overwriting".red()
+                },
+            ]);
+            texts.push(loop_text);
+        }
 
-        Paragraph::new(counter_text)
+        Paragraph::new(Text::from(texts))
             .centered()
             .block(block)
             .render(area, buf);
