@@ -332,7 +332,7 @@ impl Widget for &SetUpState {
             texts.push(loop_text);
         }
         texts.push(Line::from(vec![
-            format!("Error #{}: ", self.error_count).into(),
+            format!("Message #{}: ", self.error_count).into(),
             self.last_error.as_str().into(),
         ]));
 
