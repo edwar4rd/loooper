@@ -180,6 +180,15 @@ impl Widget for &RollingState {
                 } else {
                     "🟥".red()
                 },
+                if self.audio_state.loop_playing[index].load(std::sync::atomic::Ordering::Relaxed) {
+                    "▶️".green()
+                } else if self.audio_state.loop_recording[index]
+                    .load(std::sync::atomic::Ordering::Relaxed)
+                {
+                    "⏺️".black()
+                } else {
+                    "⏹️".black()
+                },
                 format!(" Loop {}: ", index + 1).into(),
                 format!("{} beats, ", loop_state.beat_count).yellow(),
                 if loop_state.layering {

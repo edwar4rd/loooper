@@ -26,6 +26,7 @@ pub fn audio_setup() -> Result<(
     let loop_starting: Vec<_> = (0..8).map(|_| Arc::from(AtomicBool::new(false))).collect();
     let loop_layering: Vec<_> = (0..8).map(|_| Arc::from(AtomicBool::new(false))).collect();
     let loop_playing: Vec<_> = (0..8).map(|_| Arc::from(AtomicBool::new(false))).collect();
+    let loop_recording: Vec<_> = (0..8).map(|_| Arc::from(AtomicBool::new(false))).collect();
     let current_millibeat = Arc::new(AtomicU32::new(0));
 
     let mut audio_clock: u64 = 0; // using u32 should panic in about a day
@@ -53,12 +54,13 @@ pub fn audio_setup() -> Result<(
         })
         .collect::<Vec<_>>();
     let mut loop_filled = [false; 8];
-    let mut loop_recording = [false; 8];
     let mut loop_looping = [false; 8];
+    let mut loop_capturing = [false; 8];
     let mut loop_pos = [0usize; 8];
     let loop_length_clone = loop_length.clone();
     let loop_starting_clone = loop_starting.clone();
     let loop_playing_clone = loop_playing.clone();
+    let loop_recording_clone = loop_recording.clone();
     let mut loop_recording_start_beat = [0; 8];
 
     let process_callback = move |client: &jack::Client, ps: &jack::ProcessScope| {
@@ -163,21 +165,26 @@ pub fn audio_setup() -> Result<(
                             continue;
                         }
 
-                        if loop_recording[index]
+                        if loop_capturing[index]
                             && (current_beat - loop_recording_start_beat[index]) >= length
                         {
                             // recording ended, start looping
                             loop_filled[index] = true;
-                            loop_recording[index] = false;
+                            loop_capturing[index] = false;
                             loop_looping[index] = true;
+                            loop_recording_clone[index]
+                                .store(false, std::sync::atomic::Ordering::Relaxed);
                         }
 
                         if loop_starting_clone[index].load(std::sync::atomic::Ordering::Relaxed) {
                             if loop_filled[index] {
                                 loop_looping[index] = true;
                             } else {
-                                loop_recording[index] = true;
+                                loop_capturing[index] = true;
                                 loop_recording_start_beat[index] = current_beat;
+                                loop_pos[index] = 0;
+                                loop_recording_clone[index]
+                                    .store(true, std::sync::atomic::Ordering::Relaxed);
                             }
                         } else if loop_filled[index] {
                             loop_looping[index] = false;
@@ -185,6 +192,11 @@ pub fn audio_setup() -> Result<(
 
                         if loop_looping[index] {
                             loop_pos[index] = 0;
+                            loop_playing_clone[index]
+                                .store(true, std::sync::atomic::Ordering::Relaxed);
+                        } else {
+                            loop_playing_clone[index]
+                                .store(false, std::sync::atomic::Ordering::Relaxed);
                         }
                     }
                 }
@@ -216,11 +228,11 @@ pub fn audio_setup() -> Result<(
                     *out_sample += loop_buffers[index][loop_pos[index]];
                 }
 
-                if loop_recording[index] {
+                if loop_capturing[index] {
                     loop_buffers[index][loop_pos[index]] = *in_sample;
                 }
 
-                if loop_looping[index] || loop_recording[index] {
+                if loop_looping[index] || loop_capturing[index] {
                     loop_pos[index] += 1;
                 }
             }
@@ -271,6 +283,7 @@ pub fn audio_setup() -> Result<(
         loop_starting,
         loop_layering,
         loop_playing,
+        loop_recording,
         current_millibeat,
     };
     Ok((active_client, state))
@@ -301,6 +314,7 @@ pub struct AudioState {
     pub loop_starting: Vec<Arc<AtomicBool>>,          // Main -> Audio
     pub loop_layering: Vec<Arc<AtomicBool>>,          // Main -> Audio
     pub loop_playing: Vec<Arc<AtomicBool>>,           // Audio -> Main
+    pub loop_recording: Vec<Arc<AtomicBool>>,         // Audio -> Main
     pub current_millibeat: Arc<AtomicU32>,            // Audio -> Main
 }
 
