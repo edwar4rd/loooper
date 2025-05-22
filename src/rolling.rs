@@ -162,7 +162,7 @@ impl Widget for &RollingState {
             "BPM: ".into(),
             bpm.to_string().yellow(),
             format!(
-                "Beat: {}.{}",
+                " Beat: {}.{}",
                 current_millibeat / 1000,
                 current_millibeat % 1000
             )

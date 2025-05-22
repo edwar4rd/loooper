@@ -28,8 +28,8 @@ pub fn audio_setup() -> Result<(
     let loop_playing = (0..8).map(|_| Arc::from(AtomicBool::new(false))).collect();
     let loop_buffers = (0..8)
         .map(|_| {
-            let mut buf_vec = Vec::<f32>::with_capacity(client.sample_rate() * 2 * 16);
-            buf_vec.resize(client.sample_rate() * 2 * 16, 0.0);
+            let mut buf_vec = Vec::<f32>::with_capacity(client.sample_rate() * 2 * 17);
+            buf_vec.resize(client.sample_rate() * 2 * 17, 0.0);
             buf_vec.into_boxed_slice()
         })
         .collect::<Vec<_>>();
@@ -47,9 +47,10 @@ pub fn audio_setup() -> Result<(
     let mut phase = 0.0;
     let mut adsr = crate::adsr::ADSR::new(0.01, 0.1, 0.2, 0.02);
     let mut click_freq = 523.25 / 2.0;
+    let mut click_vol = 0.2;
     let mut last_beat_pos = 0.999;
     let current_millibeat_clone = current_millibeat.clone();
-    let mut current_beat = 0; // Which milli beat we're in, start at beat 1.0 -> 1000
+    let mut current_beat = 0; // Which milli beat we're in, start at beat 1.0 -> 1000, including the count-in
     // let tx_clone = tx.clone();
     let process_callback = move |client: &jack::Client, ps: &jack::ProcessScope| {
         let sample_rate = client.sample_rate() as u64;
@@ -74,19 +75,7 @@ pub fn audio_setup() -> Result<(
         let mbpm = mbpm_clone.load(std::sync::atomic::Ordering::Relaxed);
         let mspb = (60.0 / mbpm as f32 * 1000.0 * 1000.0) as u64;
 
-        // Count-in just started
-        if !countin_started && countin_clone.load(std::sync::atomic::Ordering::Relaxed) {
-            // Reset the audio clock
-            audio_clock = 0;
-            // Reset the beat counters
-            current_beat = 0;
-            current_millibeat_clone.store(1000, std::sync::atomic::Ordering::Relaxed);
-
-            // Set up the countin flags
-            countin_left = countin_length_clone.load(std::sync::atomic::Ordering::Relaxed);
-            countin_started = true;
-            countin_clone.store(false, std::sync::atomic::Ordering::Relaxed);
-        }
+        let mut countin_local = countin_clone.load(std::sync::atomic::Ordering::Relaxed);
 
         for (in_sample, out_sample) in in_port.iter().zip(out_port.iter_mut()) {
             // Where we are inside a beat (0.0 - 1.0)
@@ -99,11 +88,29 @@ pub fn audio_setup() -> Result<(
 
             // We entered a new beat
             if beat_pos < last_beat_pos {
+                // Check if Count-in just started
+                // This should only happen once per callback
+                if !countin_started && countin_local {
+                    // Reset the audio clock
+                    audio_clock = 0;
+                    // Reset the beat counters
+                    current_beat = 0;
+                    current_millibeat_clone.store(1000, std::sync::atomic::Ordering::Relaxed);
+
+                    // Set up the countin flags
+                    countin_left = countin_length_clone.load(std::sync::atomic::Ordering::Relaxed);
+                    countin_started = true;
+                    countin_clone.store(false, std::sync::atomic::Ordering::Relaxed);
+                    countin_local = false;
+                }
+
                 // Increase our beat counter
                 current_beat += 1;
 
                 // Reset the adsr for metronome
                 adsr.reset();
+
+                // We change the metronome volume and frequency for different phases
                 click_freq = if countin_started {
                     if countin_left == 0 {
                         countin_started = false;
@@ -120,7 +127,14 @@ pub fn audio_setup() -> Result<(
                     }
                 } else {
                     440.0
-                }
+                };
+                click_vol = if rolling {
+                    0.05
+                } else if countin_started {
+                    0.4
+                } else {
+                    0.2
+                };
             }
             last_beat_pos = beat_pos;
 
@@ -139,7 +153,7 @@ pub fn audio_setup() -> Result<(
                 if phase > 2.0 * std::f32::consts::PI {
                     phase -= 2.0 * std::f32::consts::PI;
                 }
-                let wave = phase.sin() * 0.2;
+                let wave = phase.sin() * click_vol;
                 let amp = vol * wave;
                 *out_sample += amp;
             }
