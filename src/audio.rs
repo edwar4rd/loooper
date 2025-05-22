@@ -128,7 +128,7 @@ pub fn audio_setup() -> Result<(
                         let _ = rolling_tx.send(());
                         rolling = true;
                         current_beat = 1;
-                        440.0
+                        523.25
                     } else {
                         countin_left -= 1;
                         if countin_left % 4 == 3 {
@@ -136,6 +136,12 @@ pub fn audio_setup() -> Result<(
                         } else {
                             523.25 / 2.0
                         }
+                    }
+                } else if rolling {
+                    if current_beat % 4 == 1 {
+                        523.25
+                    } else {
+                        523.25 / 2.0
                     }
                 } else {
                     440.0
@@ -210,7 +216,7 @@ pub fn audio_setup() -> Result<(
 
             {
                 // Set the adsr to release state after half a beat
-                if beat_pos > 0.5 {
+                if beat_pos > 0.25 {
                     adsr.release();
                 }
                 let vol = adsr.forward(1.0 / (sample_rate as f32));
