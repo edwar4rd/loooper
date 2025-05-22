@@ -1,75 +1,55 @@
-use color_eyre::{Result, eyre::eyre};
-use cpal::traits::{DeviceTrait, HostTrait};
+use color_eyre::Result;
+use jack::{Client, Control, PortFlags, ProcessScope};
 
-pub fn host_device_setup() -> Result<(
-    cpal::Host,
-    cpal::SupportedStreamConfig,
-    cpal::Device,
-    cpal::Device,
+pub fn audio_setup() -> Result<(
+    jack::AsyncClient<
+        Notifications,
+        jack::contrib::ClosureProcessHandler<(), impl FnMut(&Client, &ProcessScope) -> Control>,
+    >,
+    AudioState,
 )> {
-    let host = cpal::host_from_id(cpal::HostId::Jack).unwrap_or_else(|_| {
-        println!("Jack/Pipewire host not available, falling back to default host");
-        cpal::default_host()
-    });
+    // TODO: Integrate logging with the gui thread
+    jack::set_logger(jack::LoggerType::None);
 
-    let in_device = host
-        .default_input_device()
-        .ok_or_else(|| eyre!("Default input device is not available"))?;
-    println!("Input device : {}", in_device.name()?);
+    let (client, _status) = jack::Client::new("loooper", jack::ClientOptions::default())?;
 
-    let in_config = in_device.default_input_config()?;
-    println!("Input config : {:?}", in_config);
+    let in_port = client.register_port("loooper_in", jack::AudioIn::default())?;
+    let mut out_port = client.register_port("loooper_out", jack::AudioOut::default())?;
 
-    let out_device = host
-        .default_output_device()
-        .ok_or_else(|| eyre!("Default output device is not available"))?;
-    println!("Output device : {}", out_device.name()?);
+    let process_callback = move |_: &jack::Client, ps: &jack::ProcessScope| {
+        let in_port = in_port.as_slice(ps);
+        let out_port = out_port.as_mut_slice(ps);
 
-    let out_config = out_device
-        .supported_output_configs()?
-        .find(|config| {
-            config.channels() == in_config.channels()
-                && config.sample_format() == in_config.sample_format()
-                && config
-                    .try_with_sample_rate(in_config.sample_rate())
-                    .is_some()
-        })
-        .map(|range| range.with_sample_rate(in_config.sample_rate()))
-        .ok_or_else(|| eyre!("Output device doesn't support the same format as the input"))?;
-
-    if let cpal::SupportedBufferSize::Unknown = in_config.buffer_size() {
-        return Err(eyre!("Input device doesn't support a fixed buffer size"));
-    }
-    assert_eq!(in_config, out_config);
-
-    println!("Output config : {:?}", out_config);
-
-    Ok((host, in_config, in_device, out_device))
-}
-
-use std::sync::{
-    Arc,
-    atomic::{AtomicBool, AtomicU32},
-};
-use tokio::sync::mpsc;
-
-#[test]
-fn test_host_device_setup() {
-    let result = host_device_setup();
-    assert!(result.is_ok());
-    let _ = result.unwrap();
-}
-
-pub fn create_audio_streams(
-    _host: cpal::Host,
-    supported_config: cpal::SupportedStreamConfig,
-    input_device: cpal::Device,
-    output_device: cpal::Device,
-) -> Result<(cpal::Stream, cpal::Stream, AudioState)> {
-    use ringbuf::{
-        HeapRb,
-        traits::{Consumer, Producer, Split},
+        out_port.clone_from_slice(in_port);
+        jack::Control::Continue
     };
+    let process = jack::contrib::ClosureProcessHandler::new(process_callback);
+
+    let active_client = client.activate_async(Notifications, process)?;
+
+    let src_ports = active_client.as_client().ports(
+        None,
+        Some("32 bit float mono audio"),
+        PortFlags::IS_OUTPUT.union(PortFlags::IS_PHYSICAL),
+    );
+    if let Some(port) = src_ports.first() {
+        active_client
+            .as_client()
+            .connect_ports_by_name(port.as_str(), "loooper:loooper_in")
+            .unwrap();
+    }
+
+    let dest_ports = active_client.as_client().ports(
+        None,
+        Some("32 bit float mono audio"),
+        PortFlags::IS_INPUT.union(PortFlags::IS_PHYSICAL),
+    );
+    for port in &dest_ports {
+        active_client
+            .as_client()
+            .connect_ports_by_name("loooper:loooper_out", port.as_str())
+            .unwrap();
+    }
 
     let enabled = Arc::new(AtomicBool::new(false));
     let mbpm = Arc::new(AtomicU32::new(120));
@@ -89,118 +69,20 @@ pub fn create_audio_streams(
         loop_layering,
         loop_playing,
     };
+    Ok((active_client, state))
+}
 
-    let (buffer_size, config) = {
-        let mut config = supported_config.config();
-        if let cpal::SupportedBufferSize::Range { min, max: _ } = supported_config.buffer_size() {
-            config.buffer_size = cpal::BufferSize::Fixed(*min);
-            (*min, config)
-        } else {
-            unreachable!("Buffer size is not fixed");
-        }
-    };
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, AtomicU32},
+};
+use tokio::sync::mpsc;
 
-    // Create a delay in case the input and output devices aren't synced.
-    // let latency_frames = (1000.0 / 1_000.0) * config.sample_rate().0 as f32;
-    // let latency_samples = latency_frames as usize * config.channels() as usize;
-    let latency_samples = buffer_size as usize * config.channels as usize;
-
-    // The buffer to share samples
-    let ring = HeapRb::<f32>::new(latency_samples * 2);
-    let (mut producer, mut consumer) = ring.split();
-
-    // Fill the samples with 0.0 equal to the length of the delay.
-    for _ in 0..latency_samples {
-        // The ring buffer has twice as much space as necessary to add latency here,
-        // so this should never fail
-        producer.try_push(0.0).unwrap();
-    }
-
-    let tx_clone = tx.clone();
-    let err_fn = move |err: cpal::StreamError| {
-        let _ = tx_clone.send(format!("an error occurred on stream: {}", err));
-    };
-
-    let tx_clone = tx.clone();
-    let err_fn_2 = move |err: cpal::StreamError| {
-        let _ = tx_clone.send(format!("an error occurred on stream: {}", err));
-    };
-
-    let enabled_clone = enabled.clone();
-    let tx_clone = tx.clone();
-    let input_data_fn = move |data: &[f32], _: &cpal::InputCallbackInfo| {
-        if !enabled_clone.load(std::sync::atomic::Ordering::Relaxed) {
-            return;
-        }
-
-        let mut output_fell_behind = false;
-        for &sample in data {
-            if producer.try_push(sample).is_err() {
-                output_fell_behind = true;
-            }
-        }
-        if output_fell_behind {
-            let _ = tx_clone.send("output stream fell behind: try increasing latency".into());
-        }
-    };
-
-    let mut audio_clock: u128 = 0;
-    let mut last_enabled = false;
-    let mbpm_clone = mbpm.clone();
-    let output_data_fn = move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
-        if !enabled.load(std::sync::atomic::Ordering::Relaxed) {
-            for sample in data {
-                *sample = 0.0;
-            }
-            last_enabled = false;
-            return;
-        }
-
-        if !last_enabled {
-            audio_clock = 0;
-        }
-        last_enabled = true;
-
-        let mut input_fell_behind = false;
-
-        let mbpm = mbpm_clone.load(std::sync::atomic::Ordering::Relaxed);
-        let spb = 60.0 / mbpm as f32 * 1000.0;
-
-        for frame in data.chunks_mut(config.channels as usize) {
-            let vol = if ((audio_clock as f32 / config.sample_rate.0 as f32) / spb % 1.) < 0.125 {
-                (1f32).min(((audio_clock as f32 / config.sample_rate.0 as f32) / spb % 1.) * 100.)
-            } else {
-                (0f32).max(
-                    1. - (((audio_clock as f32 / config.sample_rate.0 as f32) / spb % 1.) - 0.125)
-                        * 10.,
-                )
-            };
-            let wave = (audio_clock as f32 * 523.25 * 2.0 * std::f32::consts::PI
-                / config.sample_rate.0 as f32)
-                .sin()
-                * 0.2;
-            let amp = vol * wave;
-            for sample in frame.iter_mut() {
-                *sample = match consumer.try_pop() {
-                    Some(s) => s + amp,
-                    None => {
-                        input_fell_behind = true;
-                        0.0
-                    }
-                };
-            }
-            audio_clock += 1;
-        }
-        if input_fell_behind {
-            let _ = tx.send("input stream fell behind: try increasing latency".into());
-        }
-    };
-
-    let input_stream = input_device.build_input_stream(&config, input_data_fn, err_fn, None)?;
-    let output_stream =
-        output_device.build_output_stream(&config, output_data_fn, err_fn_2, None)?;
-    println!("Successfully built streams.");
-    Ok((input_stream, output_stream, state))
+#[test]
+fn test_host_device_setup() {
+    let result = audio_setup();
+    assert!(result.is_ok());
+    let _ = result.unwrap();
 }
 
 #[derive(Debug)]
@@ -212,4 +94,84 @@ pub struct AudioState {
     pub loop_starting: Vec<Arc<AtomicBool>>,     // Main -> Audio
     pub loop_layering: Vec<Arc<AtomicBool>>,     // Main -> Audio
     pub loop_playing: Vec<Arc<AtomicBool>>,      // Audio -> Main
+}
+
+// Taken from https://github.com/RustAudio/rust-jack/blob/main/examples/playback_capture.rs
+pub struct Notifications;
+
+impl jack::NotificationHandler for Notifications {
+    fn thread_init(&self, _: &jack::Client) {
+        println!("JACK: thread init");
+    }
+
+    /// Not much we can do here, see https://man7.org/linux/man-pages/man7/signal-safety.7.html.
+    unsafe fn shutdown(&mut self, _: jack::ClientStatus, _: &str) {}
+
+    fn freewheel(&mut self, _: &jack::Client, is_enabled: bool) {
+        println!(
+            "JACK: freewheel mode is {}",
+            if is_enabled { "on" } else { "off" }
+        );
+    }
+
+    fn sample_rate(&mut self, _: &jack::Client, srate: jack::Frames) -> jack::Control {
+        println!("JACK: sample rate changed to {srate}");
+        jack::Control::Continue
+    }
+
+    fn client_registration(&mut self, _: &jack::Client, name: &str, is_reg: bool) {
+        println!(
+            "JACK: {} client with name \"{}\"",
+            if is_reg { "registered" } else { "unregistered" },
+            name
+        );
+    }
+
+    fn port_registration(&mut self, _: &jack::Client, port_id: jack::PortId, is_reg: bool) {
+        println!(
+            "JACK: {} port with id {}",
+            if is_reg { "registered" } else { "unregistered" },
+            port_id
+        );
+    }
+
+    fn port_rename(
+        &mut self,
+        _: &jack::Client,
+        port_id: jack::PortId,
+        old_name: &str,
+        new_name: &str,
+    ) -> jack::Control {
+        println!("JACK: port with id {port_id} renamed from {old_name} to {new_name}",);
+        jack::Control::Continue
+    }
+
+    fn ports_connected(
+        &mut self,
+        _: &jack::Client,
+        port_id_a: jack::PortId,
+        port_id_b: jack::PortId,
+        are_connected: bool,
+    ) {
+        println!(
+            "JACK: ports with id {} and {} are {}",
+            port_id_a,
+            port_id_b,
+            if are_connected {
+                "connected"
+            } else {
+                "disconnected"
+            }
+        );
+    }
+
+    fn graph_reorder(&mut self, _: &jack::Client) -> jack::Control {
+        println!("JACK: graph reordered");
+        jack::Control::Continue
+    }
+
+    fn xrun(&mut self, _: &jack::Client) -> jack::Control {
+        println!("JACK: xrun occurred");
+        jack::Control::Continue
+    }
 }

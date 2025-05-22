@@ -1,5 +1,4 @@
 use color_eyre::Result;
-use cpal::traits::StreamTrait;
 use loooper::{CountInState, PrepareState, RollingState, SetUpState, audio};
 use ratatui::{DefaultTerminal, Frame};
 
@@ -16,24 +15,16 @@ async fn main() -> Result<()> {
     color_eyre::install().inspect_err(|_| {
         eprintln!("Failed to install color_eyre");
     })?;
-    let (audio_host, audio_config, input_device, output_device) = audio::host_device_setup()
-        .inspect_err(|err| {
-            eprintln!("Failed to setup audio host device: {}", err);
-            eprintln!("Is JACK started or pw-jack used?");
-        })?;
-    let (input_stream, output_stream, audio_state) =
-        audio::create_audio_streams(audio_host, audio_config, input_device, output_device)
-            .inspect_err(|err| {
-                eprintln!("Failed to create audio streams: {}", err);
-            })?;
-    input_stream.play()?;
-    output_stream.play()?;
+    let (client, audio_state) = audio::audio_setup().inspect_err(|err| {
+        eprintln!("Failed to setup audio: {}", err);
+        eprintln!("Is JACK started or pw-jack used?");
+    })?;
+
     let terminal = ratatui::init();
     let state = State::default_with_audio_state(audio_state);
 
     let result = state.run(terminal).await;
-    input_stream.pause()?;
-    output_stream.pause()?;
+    drop(client);
     ratatui::restore();
     result
 }
