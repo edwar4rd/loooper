@@ -75,10 +75,19 @@ pub fn create_audio_streams(
     let mbpm = Arc::new(AtomicU32::new(120));
     let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
 
+    let loop_length = (0..8).map(|_| Arc::from(AtomicU32::new(4))).collect();
+    let loop_starting = (0..8).map(|_| Arc::from(AtomicBool::new(false))).collect();
+    let loop_layering = (0..8).map(|_| Arc::from(AtomicBool::new(false))).collect();
+    let loop_playing = (0..8).map(|_| Arc::from(AtomicBool::new(false))).collect();
+
     let state = AudioState {
         enabled: enabled.clone(),
         mbpm: mbpm.clone(),
         errors: rx,
+        loop_length,
+        loop_starting,
+        loop_layering,
+        loop_playing,
     };
 
     let (buffer_size, config) = {
@@ -196,7 +205,11 @@ pub fn create_audio_streams(
 
 #[derive(Debug)]
 pub struct AudioState {
-    pub enabled: Arc<AtomicBool>,
-    pub mbpm: Arc<AtomicU32>,
-    pub errors: mpsc::UnboundedReceiver<String>,
+    pub enabled: Arc<AtomicBool>,                // Main -> Audio
+    pub mbpm: Arc<AtomicU32>,                    // Main -> Audio
+    pub errors: mpsc::UnboundedReceiver<String>, // Audio -> Main
+    pub loop_length: Vec<Arc<AtomicU32>>,        // Main -> Audio
+    pub loop_starting: Vec<Arc<AtomicBool>>,     // Main -> Audio
+    pub loop_layering: Vec<Arc<AtomicBool>>,     // Main -> Audio
+    pub loop_playing: Vec<Arc<AtomicBool>>,      // Audio -> Main
 }

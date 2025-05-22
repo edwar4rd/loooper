@@ -40,8 +40,12 @@ pub struct SetUpState {
 
 #[derive(Debug)]
 pub struct LoopState {
+    /// The length of the loop in beats.
     pub beat_count: u32,
+    /// Whether the loop should start immediately after count-in.
     pub starting: bool,
+    /// Whether the loop should be layered on top of prievious recording.
+    pub layering: bool,
 }
 
 impl Default for LoopState {
@@ -49,6 +53,7 @@ impl Default for LoopState {
         LoopState {
             beat_count: 4,
             starting: false,
+            layering: false,
         }
     }
 }
@@ -64,6 +69,7 @@ impl SetUpState {
             loops: vec![LoopState {
                 beat_count: 4,
                 starting: true,
+                layering: false,
             }],
             event_stream: EventStream::new(),
             audio_state,
@@ -121,6 +127,7 @@ impl SetUpState {
             loops: vec![LoopState {
                 beat_count: 4,
                 starting: true,
+                layering: false,
             }],
             event_stream: rolling_state.event_stream,
             audio_state: rolling_state.audio_state,
@@ -155,7 +162,8 @@ impl SetUpState {
             }
             KeyCode::Char(' ') => self.transititon(),
             KeyCode::Char('p') => panic!("Manual panic!"),
-            KeyCode::Char('l') => self.add_loop(),
+            KeyCode::Char('a') => self.add_loop(),
+            KeyCode::Char('l') => self.toggle_layering(),
             _ => {}
         }
     }
@@ -168,6 +176,7 @@ impl SetUpState {
         let new_loop = LoopState {
             beat_count: 4,
             starting: false,
+            layering: false,
         };
         self.loops.push(new_loop);
     }
@@ -236,6 +245,15 @@ impl SetUpState {
             loop_state.starting = !loop_state.starting;
         }
     }
+
+    fn toggle_layering(&mut self) {
+        if self.selected == 0 {
+            return;
+        }
+        if let Some(loop_state) = self.loops.get_mut(self.selected - 1) {
+            loop_state.layering = !loop_state.layering;
+        }
+    }
 }
 
 impl Widget for &SetUpState {
@@ -255,8 +273,18 @@ impl Widget for &SetUpState {
                 " Autostart ".into()
             },
             "<Tab>".blue().bold(),
+            if self.selected == 0 {
+                "".into()
+            } else {
+                " Toggle Layering ".into()
+            },
+            if self.selected == 0 {
+                "".into()
+            } else {
+                "<L>".blue().bold()
+            },
             " Add Loop ".into(),
-            "<L>".blue().bold(),
+            "<A>".blue().bold(),
             " Finish Setup ".into(),
             "<Space>".blue().bold(),
             " Quit ".into(),
@@ -294,7 +322,12 @@ impl Widget for &SetUpState {
                     "🟥".red()
                 },
                 format!(" Loop {}: ", i + 1).into(),
-                format!("{} beats", loop_state.beat_count).yellow(),
+                format!("{} beats, ", loop_state.beat_count).yellow(),
+                if loop_state.layering {
+                    "layering".green()
+                } else {
+                    "overwriting".red()
+                },
             ]);
             texts.push(loop_text);
         }
