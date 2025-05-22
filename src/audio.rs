@@ -24,7 +24,7 @@ pub fn audio_setup() -> Result<(
     let loop_layering = (0..8).map(|_| Arc::from(AtomicBool::new(false))).collect();
     let loop_playing = (0..8).map(|_| Arc::from(AtomicBool::new(false))).collect();
 
-    let mut audio_clock: u128 = 0;
+    let mut audio_clock: u64 = 0; // using u32 should panic in about a day
     let enabled_clone = enabled.clone();
     let mut last_enabled = false;
     let mbpm_clone = mbpm.clone();
@@ -45,20 +45,21 @@ pub fn audio_setup() -> Result<(
         last_enabled = true;
 
         let mbpm = mbpm_clone.load(std::sync::atomic::Ordering::Relaxed);
-        let spb = 60.0 / mbpm as f32 * 1000.0;
+        let mspb = (60.0 / mbpm as f32 * 1000.0 * 1000.0) as u32;
 
         for (in_sample, out_sample) in in_port.iter().zip(out_port.iter_mut()) {
-            let vol = if ((audio_clock as f32 / sample_rate as f32) / spb % 1.) < 0.125 {
-                (1f32).min(((audio_clock as f32 / sample_rate as f32) / spb % 1.) * 100.)
+            let beat_pos = (audio_clock % (sample_rate as u64 * mspb as u64 / 1000)) as f32
+                / ((sample_rate as u64 * mspb as u64 / 1000) as f32);
+            let vol = if beat_pos < 0.125 {
+                (1f32).min(beat_pos * 100.)
             } else {
-                (0f32).max(
-                    1. - (((audio_clock as f32 / sample_rate as f32) / spb % 1.) - 0.125) * 10.,
-                )
+                (0f32).max(1. - (beat_pos - 0.125) * 10.)
             };
-            let wave = (audio_clock as f32 * 523.25 * 2.0 * std::f32::consts::PI
-                / sample_rate as f32)
-                .sin()
-                * 0.2;
+            let wave =
+                ((audio_clock % sample_rate as u64) as f32 * 523.25 * 2.0 * std::f32::consts::PI
+                    / sample_rate as f32)
+                    .sin()
+                    * 0.2;
             let amp = vol * wave;
 
             *out_sample = amp + in_sample;
