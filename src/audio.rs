@@ -29,6 +29,9 @@ pub fn audio_setup() -> Result<(
     let mut last_enabled = false;
     let mbpm_clone = mbpm.clone();
     let mut phase = 0.0;
+    let mut adsr = crate::adsr::ADSR::new(0.01, 0.1, 0.2, 0.02);
+    let mut last_beat_pos = 0.999;
+    let mut released = false;
     // let tx_clone = tx.clone();
     let process_callback = move |client: &jack::Client, ps: &jack::ProcessScope| {
         let sample_rate = client.sample_rate() as u64;
@@ -51,12 +54,18 @@ pub fn audio_setup() -> Result<(
         for (in_sample, out_sample) in in_port.iter().zip(out_port.iter_mut()) {
             let beat_pos = (audio_clock % (sample_rate * mspb / 1000)) as f32
                 / ((sample_rate * mspb / 1000) as f32);
-            let vol = if beat_pos < 0.125 {
-                (1f32).min(beat_pos * 100.)
-            } else {
-                (0f32).max(1. - (beat_pos - 0.125) * 10.)
-            };
+            if beat_pos < last_beat_pos {
+                adsr.reset();
+                released = false;
+            }
+            last_beat_pos = beat_pos;
 
+            if beat_pos > 0.5 && !released {
+                adsr.release();
+                released = true;
+            }
+
+            let vol = adsr.forward(1.0 / (sample_rate as f32));
             phase += 1.0 / (sample_rate as f32 / 523.25) * 2.0 * std::f32::consts::PI;
             if phase > 2.0 * std::f32::consts::PI {
                 phase -= 2.0 * std::f32::consts::PI;
