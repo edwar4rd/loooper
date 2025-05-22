@@ -48,6 +48,10 @@ impl ADSR {
     }
 
     pub fn release(&mut self) {
+        if self.phase != ADSRPhase::S {
+            return;
+        }
+
         if self.release == 0.0 {
             self.phase = ADSRPhase::End;
             self.level = 0.0;

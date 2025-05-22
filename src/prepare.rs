@@ -89,9 +89,19 @@ impl PrepareState {
     fn handle_key_event(&mut self, key_event: KeyEvent) {
         match key_event.code {
             KeyCode::Char('q') => self.exit(),
-            KeyCode::Char(' ') => self.transititon(),
+            KeyCode::Char(' ') => self.start_countin(),
             _ => {}
         }
+    }
+
+    fn start_countin(&mut self) {
+        self.audio_state
+            .countin_length
+            .store(8, std::sync::atomic::Ordering::Relaxed);
+        self.audio_state
+            .countin
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+        self.transititon();
     }
 }
 
