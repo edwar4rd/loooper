@@ -28,9 +28,10 @@ pub fn audio_setup() -> Result<(
     let enabled_clone = enabled.clone();
     let mut last_enabled = false;
     let mbpm_clone = mbpm.clone();
+    let mut phase = 0.0;
     // let tx_clone = tx.clone();
     let process_callback = move |client: &jack::Client, ps: &jack::ProcessScope| {
-        let sample_rate = client.sample_rate();
+        let sample_rate = client.sample_rate() as u64;
         let in_port = in_port.as_slice(ps);
         let out_port = out_port.as_mut_slice(ps);
 
@@ -45,21 +46,22 @@ pub fn audio_setup() -> Result<(
         last_enabled = true;
 
         let mbpm = mbpm_clone.load(std::sync::atomic::Ordering::Relaxed);
-        let mspb = (60.0 / mbpm as f32 * 1000.0 * 1000.0) as u32;
+        let mspb = (60.0 / mbpm as f32 * 1000.0 * 1000.0) as u64;
 
         for (in_sample, out_sample) in in_port.iter().zip(out_port.iter_mut()) {
-            let beat_pos = (audio_clock % (sample_rate as u64 * mspb as u64 / 1000)) as f32
-                / ((sample_rate as u64 * mspb as u64 / 1000) as f32);
+            let beat_pos = (audio_clock % (sample_rate * mspb / 1000)) as f32
+                / ((sample_rate * mspb / 1000) as f32);
             let vol = if beat_pos < 0.125 {
                 (1f32).min(beat_pos * 100.)
             } else {
                 (0f32).max(1. - (beat_pos - 0.125) * 10.)
             };
-            let wave =
-                ((audio_clock % sample_rate as u64) as f32 * 523.25 * 2.0 * std::f32::consts::PI
-                    / sample_rate as f32)
-                    .sin()
-                    * 0.2;
+
+            phase += 1.0 / (sample_rate as f32 / 523.25) * 2.0 * std::f32::consts::PI;
+            if phase > 2.0 * std::f32::consts::PI {
+                phase -= 2.0 * std::f32::consts::PI;
+            }
+            let wave = phase.sin() * 0.2;
             let amp = vol * wave;
 
             *out_sample = amp + in_sample;
