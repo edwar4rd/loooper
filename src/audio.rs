@@ -24,16 +24,53 @@ pub fn audio_setup() -> Result<(
     let loop_layering = (0..8).map(|_| Arc::from(AtomicBool::new(false))).collect();
     let loop_playing = (0..8).map(|_| Arc::from(AtomicBool::new(false))).collect();
 
-    let process_callback = move |_: &jack::Client, ps: &jack::ProcessScope| {
+    let mut audio_clock: u128 = 0;
+    let enabled_clone = enabled.clone();
+    let mut last_enabled = false;
+    let mbpm_clone = mbpm.clone();
+    // let tx_clone = tx.clone();
+    let process_callback = move |client: &jack::Client, ps: &jack::ProcessScope| {
+        let sample_rate = client.sample_rate();
         let in_port = in_port.as_slice(ps);
         let out_port = out_port.as_mut_slice(ps);
 
-        out_port.clone_from_slice(in_port);
+        if !enabled_clone.load(std::sync::atomic::Ordering::Relaxed) {
+            out_port.fill(0.0);
+            return jack::Control::Continue;
+        }
+
+        if !last_enabled {
+            audio_clock = 0;
+        }
+        last_enabled = true;
+
+        let mbpm = mbpm_clone.load(std::sync::atomic::Ordering::Relaxed);
+        let spb = 60.0 / mbpm as f32 * 1000.0;
+
+        for (in_sample, out_sample) in in_port.iter().zip(out_port.iter_mut()) {
+            let vol = if ((audio_clock as f32 / sample_rate as f32) / spb % 1.) < 0.125 {
+                (1f32).min(((audio_clock as f32 / sample_rate as f32) / spb % 1.) * 100.)
+            } else {
+                (0f32).max(
+                    1. - (((audio_clock as f32 / sample_rate as f32) / spb % 1.) - 0.125) * 10.,
+                )
+            };
+            let wave = (audio_clock as f32 * 523.25 * 2.0 * std::f32::consts::PI
+                / sample_rate as f32)
+                .sin()
+                * 0.2;
+            let amp = vol * wave;
+
+            *out_sample = amp + in_sample;
+
+            audio_clock += 1;
+        }
         jack::Control::Continue
     };
     let process = jack::contrib::ClosureProcessHandler::new(process_callback);
 
-    let active_client = client.activate_async(Notifications, process)?;
+    let tx_clone = tx.clone();
+    let active_client = client.activate_async(Notifications { tx: tx_clone }, process)?;
 
     {
         let src_ports = active_client.as_client().ports(
@@ -98,42 +135,46 @@ pub struct AudioState {
 }
 
 // Taken from https://github.com/RustAudio/rust-jack/blob/main/examples/playback_capture.rs
-pub struct Notifications;
+pub struct Notifications {
+    pub tx: mpsc::UnboundedSender<String>,
+}
 
 impl jack::NotificationHandler for Notifications {
     fn thread_init(&self, _: &jack::Client) {
-        println!("JACK: thread init");
+        let _ = self.tx.send("JACK: thread init".to_string());
     }
 
     /// Not much we can do here, see https://man7.org/linux/man-pages/man7/signal-safety.7.html.
     unsafe fn shutdown(&mut self, _: jack::ClientStatus, _: &str) {}
 
     fn freewheel(&mut self, _: &jack::Client, is_enabled: bool) {
-        println!(
+        let _ = self.tx.send(format!(
             "JACK: freewheel mode is {}",
             if is_enabled { "on" } else { "off" }
-        );
+        ));
     }
 
     fn sample_rate(&mut self, _: &jack::Client, srate: jack::Frames) -> jack::Control {
-        println!("JACK: sample rate changed to {srate}");
+        let _ = self
+            .tx
+            .send(format!("JACK: sample rate changed to {srate}"));
         jack::Control::Continue
     }
 
     fn client_registration(&mut self, _: &jack::Client, name: &str, is_reg: bool) {
-        println!(
+        let _ = self.tx.send(format!(
             "JACK: {} client with name \"{}\"",
             if is_reg { "registered" } else { "unregistered" },
             name
-        );
+        ));
     }
 
     fn port_registration(&mut self, _: &jack::Client, port_id: jack::PortId, is_reg: bool) {
-        println!(
+        let _ = self.tx.send(format!(
             "JACK: {} port with id {}",
             if is_reg { "registered" } else { "unregistered" },
-            port_id
-        );
+            port_id,
+        ));
     }
 
     fn port_rename(
@@ -143,7 +184,9 @@ impl jack::NotificationHandler for Notifications {
         old_name: &str,
         new_name: &str,
     ) -> jack::Control {
-        println!("JACK: port with id {port_id} renamed from {old_name} to {new_name}",);
+        let _ = self.tx.send(format!(
+            "JACK: port with id {port_id} renamed from {old_name} to {new_name}",
+        ));
         jack::Control::Continue
     }
 
@@ -154,7 +197,7 @@ impl jack::NotificationHandler for Notifications {
         port_id_b: jack::PortId,
         are_connected: bool,
     ) {
-        println!(
+        let _ = self.tx.send(format!(
             "JACK: ports with id {} and {} are {}",
             port_id_a,
             port_id_b,
@@ -163,16 +206,16 @@ impl jack::NotificationHandler for Notifications {
             } else {
                 "disconnected"
             }
-        );
+        ));
     }
 
     fn graph_reorder(&mut self, _: &jack::Client) -> jack::Control {
-        println!("JACK: graph reordered");
+        let _ = self.tx.send("JACK: graph reordered".to_string());
         jack::Control::Continue
     }
 
     fn xrun(&mut self, _: &jack::Client) -> jack::Control {
-        println!("JACK: xrun occurred");
+        let _ = self.tx.send("JACK: xrun occurred".to_string());
         jack::Control::Continue
     }
 }
