@@ -35,6 +35,7 @@ pub struct RollingState {
 impl RollingState {
     pub async fn handle_events(&mut self) -> Result<()> {
         let event = self.event_stream.next().fuse();
+        let sleep = tokio::time::sleep(std::time::Duration::from_millis(50));
         tokio::select! {
             maybe_event = event => {
                 if let Some(event) = maybe_event {
@@ -45,6 +46,9 @@ impl RollingState {
                         _ => {}
                     }
                 }
+            },
+            _ = sleep => {
+
             }
         }
         Ok(())
@@ -149,7 +153,21 @@ impl Widget for &RollingState {
             .border_set(border::THICK);
 
         let bpm = self.mbpm as f64 / 1000.;
-        let mut texts = vec![Line::from(vec!["BPM: ".into(), bpm.to_string().yellow()])];
+        let current_millibeat = self
+            .audio_state
+            .current_millibeat
+            .load(std::sync::atomic::Ordering::Relaxed)
+            - 8000;
+        let mut texts = vec![Line::from(vec![
+            "BPM: ".into(),
+            bpm.to_string().yellow(),
+            format!(
+                "Beat: {}.{}",
+                current_millibeat / 1000,
+                current_millibeat % 1000
+            )
+            .into(),
+        ])];
         for (index, loop_state) in self.loops.iter().enumerate() {
             let loop_text = Line::from(vec![
                 if self.selected == index {

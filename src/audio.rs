@@ -26,6 +26,14 @@ pub fn audio_setup() -> Result<(
     let loop_starting = (0..8).map(|_| Arc::from(AtomicBool::new(false))).collect();
     let loop_layering = (0..8).map(|_| Arc::from(AtomicBool::new(false))).collect();
     let loop_playing = (0..8).map(|_| Arc::from(AtomicBool::new(false))).collect();
+    let loop_buffers = (0..8)
+        .map(|_| {
+            let mut buf_vec = Vec::<f32>::with_capacity(client.sample_rate() * 2 * 16);
+            buf_vec.resize(client.sample_rate() * 2 * 16, 0.0);
+            buf_vec.into_boxed_slice()
+        })
+        .collect::<Vec<_>>();
+    let current_millibeat = Arc::new(AtomicU32::new(0));
 
     let mut audio_clock: u64 = 0; // using u32 should panic in about a day
     let enabled_clone = enabled.clone();
@@ -34,53 +42,73 @@ pub fn audio_setup() -> Result<(
     let mut countin_started = false;
     let countin_length_clone = countin_length.clone();
     let mut countin_left = 0;
+    let mut rolling = false;
     let mbpm_clone = mbpm.clone();
     let mut phase = 0.0;
     let mut adsr = crate::adsr::ADSR::new(0.01, 0.1, 0.2, 0.02);
     let mut click_freq = 523.25 / 2.0;
     let mut last_beat_pos = 0.999;
+    let current_millibeat_clone = current_millibeat.clone();
+    let mut current_beat = 0; // Which milli beat we're in, start at beat 1.0 -> 1000
     // let tx_clone = tx.clone();
     let process_callback = move |client: &jack::Client, ps: &jack::ProcessScope| {
         let sample_rate = client.sample_rate() as u64;
         let in_port = in_port.as_slice(ps);
         let out_port = out_port.as_mut_slice(ps);
 
+        // We're not enabled, output nothing and quit callback
         if !enabled_clone.load(std::sync::atomic::Ordering::Relaxed) {
             out_port.fill(0.0);
+            last_enabled = false;
             return jack::Control::Continue;
         }
 
         if !last_enabled {
-            // We just got enabled
+            // We just got enabled, reset relavent audio callback states
             audio_clock = 0;
             click_freq = 523.25 / 2.0;
         }
         last_enabled = true;
 
+        // Get bpm * 1000 from the gui thread (this is currently only altered during SetUp -> Prepare)
         let mbpm = mbpm_clone.load(std::sync::atomic::Ordering::Relaxed);
         let mspb = (60.0 / mbpm as f32 * 1000.0 * 1000.0) as u64;
+
+        // Count-in just started
         if !countin_started && countin_clone.load(std::sync::atomic::Ordering::Relaxed) {
-            countin_clone.store(false, std::sync::atomic::Ordering::Relaxed);
+            // Reset the audio clock
+            audio_clock = 0;
+            // Reset the beat counters
+            current_beat = 0;
+            current_millibeat_clone.store(1000, std::sync::atomic::Ordering::Relaxed);
+
+            // Set up the countin flags
             countin_left = countin_length_clone.load(std::sync::atomic::Ordering::Relaxed);
             countin_started = true;
+            countin_clone.store(false, std::sync::atomic::Ordering::Relaxed);
         }
 
         for (in_sample, out_sample) in in_port.iter().zip(out_port.iter_mut()) {
             // Where we are inside a beat (0.0 - 1.0)
             let beat_pos = (audio_clock % (sample_rate * mspb / 1000)) as f32
                 / ((sample_rate * mspb / 1000) as f32);
+            let current_subbeat = (beat_pos * 1000.0) as u32;
 
-            // Set the sample to the input sample
+            // Set the sample to the input sample (monitoring)
             *out_sample = *in_sample;
 
             // We entered a new beat
             if beat_pos < last_beat_pos {
+                // Increase our beat counter
+                current_beat += 1;
+
                 // Reset the adsr for metronome
                 adsr.reset();
                 click_freq = if countin_started {
                     if countin_left == 0 {
                         countin_started = false;
                         let _ = rolling_tx.send(());
+                        rolling = true;
                         440.0
                     } else {
                         countin_left -= 1;
@@ -95,6 +123,11 @@ pub fn audio_setup() -> Result<(
                 }
             }
             last_beat_pos = beat_pos;
+
+            current_millibeat_clone.store(
+                current_beat * 1000 + current_subbeat,
+                std::sync::atomic::Ordering::Relaxed,
+            );
 
             {
                 // Set the adsr to release state after half a beat
@@ -157,6 +190,7 @@ pub fn audio_setup() -> Result<(
         loop_starting,
         loop_layering,
         loop_playing,
+        current_millibeat,
     };
     Ok((active_client, state))
 }
@@ -186,6 +220,7 @@ pub struct AudioState {
     pub loop_starting: Vec<Arc<AtomicBool>>,          // Main -> Audio
     pub loop_layering: Vec<Arc<AtomicBool>>,          // Main -> Audio
     pub loop_playing: Vec<Arc<AtomicBool>>,           // Audio -> Main
+    pub current_millibeat: Arc<AtomicU32>,            // Audio -> Main
 }
 
 // Taken from https://github.com/RustAudio/rust-jack/blob/main/examples/playback_capture.rs
