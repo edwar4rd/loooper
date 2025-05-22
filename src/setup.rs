@@ -123,6 +123,12 @@ impl SetUpState {
     }
 
     fn transititon(&mut self) {
+        self.audio_state
+            .enabled
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+        self.audio_state
+            .mbpm
+            .store(self.mbpm, std::sync::atomic::Ordering::Relaxed);
         self.next_phase = true;
     }
 
