@@ -10,7 +10,7 @@ pub enum State {
     Rolling(RollingState),
 }
 
-#[tokio::main]
+#[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<()> {
     color_eyre::install().inspect_err(|_| {
         eprintln!("Failed to install color_eyre");
