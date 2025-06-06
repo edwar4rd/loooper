@@ -1,4 +1,4 @@
-use crate::filter::reverb_sample;
+use crate::filter::{Filter, Reverb};
 use color_eyre::Result;
 use jack::{Client, Control, PortFlags, ProcessScope};
 
@@ -65,13 +65,11 @@ pub fn audio_setup() -> Result<(
     let mut loop_recording_start_beat = [0; 8];
 
     const DELAY_MS: usize = 200;
+    const FEEDBACK: f32 = 0.1;
+    const WET: f32 = 1.0;
     let delay_samples = (client.sample_rate() * DELAY_MS) / 1000;
-    let feedback = 0.1;
-    let wet = 1.0;
-    let mut capture_delay_lines: Vec<Vec<f32>> = vec![vec![0.0; delay_samples]; 8];
-    let mut capture_delay_idx: Vec<usize> = vec![0; 8];
-    let mut playback_delay_lines: Vec<Vec<f32>> = vec![vec![0.0; delay_samples]; 8];
-    let mut playback_delay_idx: Vec<usize> = vec![0; 8];
+    let mut capture_delay = vec![Reverb::new(delay_samples, 0, FEEDBACK, WET); 8];
+    let mut playback_delay = vec![Reverb::new(delay_samples, 0, FEEDBACK, WET); 8];
 
     let process_callback = move |client: &jack::Client, ps: &jack::ProcessScope| {
         let sample_rate = client.sample_rate() as u64;
@@ -242,29 +240,17 @@ pub fn audio_setup() -> Result<(
 
             for index in 0..8 {
                 if loop_looping[index] {
-                    let dry_playback = loop_buffers[index][loop_pos[index]];
+                    let dry_sample = loop_buffers[index][loop_pos[index]];
                     // 再用另一條 delay line（鋪給「播放階段」的 reverb），得到 mixed
-                    let mixed_playback = reverb_sample(
-                        dry_playback,
-                        &mut playback_delay_lines[index],
-                        &mut playback_delay_idx[index],
-                        feedback,
-                        wet,
-                    );
-                    *out_sample += mixed_playback;
+                    let wet_sample = playback_delay[index].apply(dry_sample);
+                    *out_sample += wet_sample;
                 }
 
                 if loop_capturing[index] {
-                    let dry = *in_sample;
-                    let mixed = reverb_sample(
-                        dry,
-                        &mut capture_delay_lines[index],
-                        &mut capture_delay_idx[index],
-                        feedback,
-                        wet,
-                    );
+                    let dry_sample = *in_sample;
+                    let wet_sample = capture_delay[index].apply(dry_sample);
 
-                    loop_buffers[index][loop_pos[index]] = mixed;
+                    loop_buffers[index][loop_pos[index]] = wet_sample;
                 }
 
                 if loop_looping[index] || loop_capturing[index] {

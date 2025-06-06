@@ -1,3 +1,69 @@
+pub trait Filter {
+    /// Apply the filter to a single sample.
+    ///
+    /// # Arguments
+    ///
+    /// * `sample` – The input sample to filter.
+    ///
+    /// # Returns
+    ///
+    /// The filtered sample.
+    fn apply(&mut self, sample: f32) -> f32;
+}
+
+#[derive(Debug, Clone)]
+pub struct Reverb {
+    delay_line: Box<[f32]>,
+    idx: usize,
+    pub feedback: f32,
+    pub wet: f32,
+}
+
+impl Reverb {
+    /// Creates a new `Reverb` instance with the specified parameters.
+    ///
+    /// # Arguments
+    ///
+    /// * `sample_count` – The number of samples in the delay line.
+    /// * `idx` – The initial index for the delay line (usually 0).
+    /// * `feedback` – The feedback coefficient (0.0 to 1.0) controlling the decay of the reverb.
+    /// * `wet` – The wet/dry mix ratio (0.0 to 1.0) controlling the balance between the dry signal and the reverb effect.
+    ///
+    /// # Panics
+    ///
+    /// This function will panic if `wet` or `feedback` are outside the range [0.0, 1.0].
+    ///
+    /// # Returns
+    ///
+    /// A new `Reverb` instance with the specified parameters and an empty delay line.
+    ///
+    pub fn new(sample_count: usize, idx: usize, feedback: f32, wet: f32) -> Self {
+        assert!((0.0..=1f32).contains(&wet));
+        assert!((0.0..=1f32).contains(&feedback));
+
+        let delay_line = vec![0.0; sample_count].into_boxed_slice();
+
+        Self {
+            delay_line,
+            idx,
+            feedback,
+            wet,
+        }
+    }
+}
+
+impl Filter for Reverb {
+    fn apply(&mut self, dry: f32) -> f32 {
+        reverb_sample(
+            dry,
+            &mut self.delay_line,
+            &mut self.idx,
+            self.feedback,
+            self.wet,
+        )
+    }
+}
+
 /// Simple per-sample delay-line reverb function.
 ///
 /// # Arguments
@@ -16,7 +82,7 @@
 /// # Returns
 ///
 /// 回傳單個 sample 經過混響後的最終值：`dry * (1–wet) + new_wet * wet`。
-pub fn reverb_sample(
+fn reverb_sample(
     dry: f32,
     delay_line: &mut [f32],
     idx: &mut usize,
