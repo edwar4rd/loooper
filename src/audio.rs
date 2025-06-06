@@ -1,12 +1,9 @@
 use crate::filter::{Filter, Reverb};
 use color_eyre::Result;
-use jack::{Client, Control, PortFlags, ProcessScope};
+use jack::PortFlags;
 
 pub fn audio_setup() -> Result<(
-    jack::AsyncClient<
-        Notifications,
-        jack::contrib::ClosureProcessHandler<(), impl FnMut(&Client, &ProcessScope) -> Control>,
-    >,
+    jack::AsyncClient<impl jack::NotificationHandler, impl jack::ProcessHandler>,
     AudioState,
 )> {
     // TODO: Integrate logging with the gui thread
