@@ -240,7 +240,16 @@ pub fn audio_setup() -> Result<(
 
             for index in 0..8 {
                 if loop_looping[index] {
-                    *out_sample += loop_buffers[index][loop_pos[index]];
+                    let dry_playback = loop_buffers[index][loop_pos[index]];
+                    // 再用另一條 delay line（鋪給「播放階段」的 reverb），得到 mixed
+                    let mixed_playback = reverb_sample(
+                        dry_playback,
+                        &mut playback_delay_lines[index],
+                        &mut playback_delay_idx[index],
+                        feedback,
+                        wet,
+                    );
+                    *out_sample += mixed_playback;
                 }
 
                 if loop_capturing[index] {
