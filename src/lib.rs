@@ -9,3 +9,4 @@ pub mod rolling;
 pub use rolling::RollingState;
 pub mod adsr;
 pub mod loops;
+pub mod filter;
