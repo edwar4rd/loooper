@@ -68,7 +68,7 @@ pub fn audio_setup() -> Result<(
     const FEEDBACK: f32 = 0.1;
     const WET: f32 = 1.0;
     let delay_samples = (client.sample_rate() * DELAY_MS) / 1000;
-    let mut capture_delay = vec![Reverb::new(delay_samples, 0, FEEDBACK, WET); 8];
+    let mut monitor_delay = Reverb::new(delay_samples, 0, FEEDBACK, WET);
     let mut playback_delay = vec![Reverb::new(delay_samples, 0, FEEDBACK, WET); 8];
 
     let process_callback = move |client: &jack::Client, ps: &jack::ProcessScope| {
@@ -103,7 +103,7 @@ pub fn audio_setup() -> Result<(
             let current_subbeat = (beat_pos * 1000.0) as u32;
 
             // Set the sample to the input sample (monitoring)
-            *out_sample = *in_sample;
+            *out_sample = monitor_delay.apply(*in_sample);
 
             // We entered a new beat
             if beat_pos < last_beat_pos {
@@ -247,10 +247,7 @@ pub fn audio_setup() -> Result<(
                 }
 
                 if loop_capturing[index] {
-                    let dry_sample = *in_sample;
-                    let wet_sample = capture_delay[index].apply(dry_sample);
-
-                    loop_buffers[index][loop_pos[index]] = wet_sample;
+                    loop_buffers[index][loop_pos[index]] = *in_sample;
                 }
 
                 if loop_looping[index] || loop_capturing[index] {
