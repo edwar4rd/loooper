@@ -230,13 +230,32 @@ pub fn audio_setup() -> Result<(
                 *out_sample += amp;
             }
 
+            let delay_ms     = 100; 
+            let delay_samples = (client.sample_rate() as usize * delay_ms) / 1000; // 48kHz → 4800
+            let mut capture_delay_lines: Vec<Vec<f32>> = vec![ vec![0.0; delay_samples]; 8 ];
+            let mut capture_delay_idx:  Vec<usize>    = vec![ 0; 8 ];
+            let feedback = 0.9_f32;
+            let wet      = 0.9_f32; 
+
+
             for index in 0..8 {
                 if loop_looping[index] {
                     *out_sample += loop_buffers[index][loop_pos[index]];
                 }
 
                 if loop_capturing[index] {
-                    loop_buffers[index][loop_pos[index]] = *in_sample;
+                    if(wet <= 0.0){
+                        loop_buffers[index][loop_pos[index]] = *in_sample;
+                    }else{
+                        let dry = *in_sample;
+                        let d_idx = capture_delay_idx[index] % delay_samples;
+                        let delayed_out = capture_delay_lines[index][d_idx];
+                        let new_wet = dry + delayed_out * feedback;
+                        capture_delay_lines[index][d_idx] = new_wet;
+                        let mixed = dry * (1.0 - wet) + new_wet * wet;
+                        loop_buffers[index][loop_pos[index]] = mixed;
+                        capture_delay_idx[index] = capture_delay_idx[index].wrapping_add(1);
+                    }
                 }
 
                 if loop_looping[index] || loop_capturing[index] {
