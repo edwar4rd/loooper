@@ -18,10 +18,12 @@ pub fn reverb_sample(
     feedback: f32,
     wet: f32,
 ) -> f32 {
-    // 如果 wet <= 0，直接 bypass，只回傳乾聲
-    if wet <= 0.0 {
+    // 如果 delay_line 為空或 wet <= 0，直接 bypass，只回傳乾聲
+    if delay_line.is_empty() || wet <= 0.0 {
+        eprintln!("Warning: delay_line is empty or wet value is non-positive, bypassing reverb.");
         return dry;
     }
+
 
     let delay_samples = delay_line.len();
     let d_idx = *idx % delay_samples;
@@ -34,6 +36,9 @@ pub fn reverb_sample(
     if *idx >= delay_samples {
         *idx -= delay_samples;
     }
-
+    let output = dry * (1.0 - wet) + new_wet * wet;
+    #[cfg(debug_assertions)]
+    { println!("reverb_sample: dry = {}, new_wet = {}, output = {}", dry, new_wet, output); }
+    output
     dry * (1.0 - wet) + new_wet * wet
 }

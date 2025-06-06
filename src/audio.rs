@@ -83,10 +83,10 @@ pub fn audio_setup() -> Result<(
         }
         last_enabled = true;
 
-        let delay_ms = 100; 
+        let delay_ms = 200; 
         let delay_samples = (client.sample_rate() as usize * delay_ms) / 1000;
-        let feedback = 0.8_f32; 
-        let wet      = 0.8_f32;
+        let feedback = 1.0_f32; 
+        let wet      = 1.0_f32;
         let mut capture_delay_lines: Vec<Vec<f32>> = vec![vec![0.0; delay_samples]; 8];
         let mut capture_delay_idx: Vec<usize> = vec![0; 8];
 
