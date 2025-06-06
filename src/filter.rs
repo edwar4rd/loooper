@@ -3,10 +3,15 @@
 /// # Arguments
 ///
 /// * `dry`           – 當前乾聲樣本 (input sample)。
-/// * `delay_line`    – 延遲線緩衝，長度為 delay_samples；此陣列會在呼叫時直接更新回音狀態。
+/// * `delay_line`    – 延遲線緩衝，長度為 delay_samples；此陣列會在呼叫時直接更新回音狀態。\
+///   以長度為零的 `delay_line` 呼叫此函數時將不會有任何回音效果。
 /// * `idx`           – 延遲線目前的讀寫位置 (circular buffer index)。傳入 &mut usize，內部會自動 +1 (wrapping)。
 /// * `feedback`      – 反饋係數 (0.0–1.0)，控制回音衰減強度。
 /// * `wet`           – 濕聲比例 (0.0–1.0)，決定混合乾聲與回音的比重。
+///
+/// # Panics
+///
+///  This function will panic if given invalid `wet` or `feedback` values.
 ///
 /// # Returns
 ///
@@ -18,11 +23,13 @@ pub fn reverb_sample(
     feedback: f32,
     wet: f32,
 ) -> f32 {
-    // 如果 wet <= 0，直接 bypass，只回傳乾聲
-    if wet <= 0.0 {
+    debug_assert!((0.0..=1f32).contains(&wet));
+    debug_assert!((0.0..=1f32).contains(&feedback));
+
+    // 如果 delay 長為零就直接 bypass，只回傳乾聲
+    if delay_line.is_empty() {
         return dry;
     }
-
 
     let delay_samples = delay_line.len();
     let d_idx = *idx % delay_samples;
