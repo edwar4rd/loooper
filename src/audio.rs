@@ -1,6 +1,6 @@
+use crate::filter::reverb_sample;
 use color_eyre::Result;
 use jack::{Client, Control, PortFlags, ProcessScope};
-use crate::filter::reverb_sample;
 
 pub fn audio_setup() -> Result<(
     jack::AsyncClient<
@@ -64,10 +64,10 @@ pub fn audio_setup() -> Result<(
     let loop_recording_clone = loop_recording.clone();
     let mut loop_recording_start_beat = [0; 8];
 
-    let delay_ms = 200; 
-    let delay_samples = (client.sample_rate() as usize * delay_ms) / 1000;
-    let feedback = 1.0_f32; 
-    let wet      = 1.0_f32;
+    const DELAY_MS: usize = 200;
+    let delay_samples = (client.sample_rate() * DELAY_MS) / 1000;
+    let feedback = 0.1;
+    let wet = 1.0;
     let mut capture_delay_lines: Vec<Vec<f32>> = vec![vec![0.0; delay_samples]; 8];
     let mut capture_delay_idx: Vec<usize> = vec![0; 8];
     let mut playback_delay_lines: Vec<Vec<f32>> = vec![vec![0.0; delay_samples]; 8];
@@ -363,7 +363,7 @@ impl jack::NotificationHandler for Notifications {
         let _ = self.tx.send("JACK: thread init".to_string());
     }
 
-    /// Not much we can do here, see https://man7.org/linux/man-pages/man7/signal-safety.7.html.
+    /// Not much we can do here, see <https://man7.org/linux/man-pages/man7/signal-safety.7.html>.
     unsafe fn shutdown(&mut self, _: jack::ClientStatus, _: &str) {}
 
     fn freewheel(&mut self, _: &jack::Client, is_enabled: bool) {

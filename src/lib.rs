@@ -8,5 +8,5 @@ pub use countin::CountInState;
 pub mod rolling;
 pub use rolling::RollingState;
 pub mod adsr;
-pub mod loops;
 pub mod filter;
+pub mod loops;
