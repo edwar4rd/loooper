@@ -70,6 +70,8 @@ pub fn audio_setup() -> Result<(
     let wet      = 1.0_f32;
     let mut capture_delay_lines: Vec<Vec<f32>> = vec![vec![0.0; delay_samples]; 8];
     let mut capture_delay_idx: Vec<usize> = vec![0; 8];
+    let mut playback_delay_lines: Vec<Vec<f32>> = vec![vec![0.0; delay_samples]; 8];
+    let mut playback_delay_idx: Vec<usize> = vec![0; 8];
 
     let process_callback = move |client: &jack::Client, ps: &jack::ProcessScope| {
         let sample_rate = client.sample_rate() as u64;
