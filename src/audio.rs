@@ -64,6 +64,13 @@ pub fn audio_setup() -> Result<(
     let loop_recording_clone = loop_recording.clone();
     let mut loop_recording_start_beat = [0; 8];
 
+    let delay_ms = 200; 
+    let delay_samples = (client.sample_rate() as usize * delay_ms) / 1000;
+    let feedback = 1.0_f32; 
+    let wet      = 1.0_f32;
+    let mut capture_delay_lines: Vec<Vec<f32>> = vec![vec![0.0; delay_samples]; 8];
+    let mut capture_delay_idx: Vec<usize> = vec![0; 8];
+
     let process_callback = move |client: &jack::Client, ps: &jack::ProcessScope| {
         let sample_rate = client.sample_rate() as u64;
         let in_port = in_port.as_slice(ps);
@@ -82,13 +89,6 @@ pub fn audio_setup() -> Result<(
             click_freq = 523.25 / 2.0;
         }
         last_enabled = true;
-
-        let delay_ms = 200; 
-        let delay_samples = (client.sample_rate() as usize * delay_ms) / 1000;
-        let feedback = 1.0_f32; 
-        let wet      = 1.0_f32;
-        let mut capture_delay_lines: Vec<Vec<f32>> = vec![vec![0.0; delay_samples]; 8];
-        let mut capture_delay_idx: Vec<usize> = vec![0; 8];
 
         // Get bpm * 1000 from the gui thread (this is currently only altered during SetUp -> Prepare)
         let mbpm = mbpm_clone.load(std::sync::atomic::Ordering::Relaxed);
