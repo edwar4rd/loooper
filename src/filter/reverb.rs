@@ -1,15 +1,4 @@
-pub trait Filter {
-    /// Apply the filter to a single sample.
-    ///
-    /// # Arguments
-    ///
-    /// * `sample` – The input sample to filter.
-    ///
-    /// # Returns
-    ///
-    /// The filtered sample.
-    fn apply(&mut self, sample: f32) -> f32;
-}
+use crate::filter::Filter;
 
 #[derive(Debug, Clone)]
 pub struct Reverb {
@@ -25,9 +14,10 @@ impl Reverb {
     /// # Arguments
     ///
     /// * `sample_count` – The number of samples in the delay line.
-    /// * `idx` – The initial index for the delay line (usually 0).
     /// * `feedback` – The feedback coefficient (0.0 to 1.0) controlling the decay of the reverb.
-    /// * `wet` – The wet/dry mix ratio (0.0 to 1.0) controlling the balance between the dry signal and the reverb effect.
+    ///   * `feedback = 1.0` is not recommended as it can lead to infinite feedback.
+    /// * `wet` – The wet/dry mix ratio (0.0 to 1.0) controlling the balance between the dry signal and the reverb effect.\
+    ///   * `wet = 0.0` means no reverb, and `wet = 1.0` means full reverb effect.
     ///
     /// # Panics
     ///
@@ -37,7 +27,7 @@ impl Reverb {
     ///
     /// A new `Reverb` instance with the specified parameters and an empty delay line.
     ///
-    pub fn new(sample_count: usize, idx: usize, feedback: f32, wet: f32) -> Self {
+    pub fn new(sample_count: usize, feedback: f32, wet: f32) -> Self {
         assert!((0.0..=1f32).contains(&wet));
         assert!((0.0..=1f32).contains(&feedback));
 
@@ -45,7 +35,7 @@ impl Reverb {
 
         Self {
             delay_line,
-            idx,
+            idx: 0,
             feedback,
             wet,
         }

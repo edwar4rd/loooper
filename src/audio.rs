@@ -68,8 +68,8 @@ pub fn audio_setup() -> Result<(
     const FEEDBACK: f32 = 0.1;
     const WET: f32 = 1.0;
     let delay_samples = (client.sample_rate() * DELAY_MS) / 1000;
-    let mut monitor_delay = Reverb::new(delay_samples, 0, FEEDBACK, WET);
-    let mut playback_delay = vec![Reverb::new(delay_samples, 0, FEEDBACK, WET); 8];
+    let mut monitor_delay = Reverb::new(delay_samples, FEEDBACK, WET);
+    let mut playback_delay = vec![Reverb::new(delay_samples, FEEDBACK, WET); 8];
 
     let process_callback = move |client: &jack::Client, ps: &jack::ProcessScope| {
         let sample_rate = client.sample_rate() as u64;
