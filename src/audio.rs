@@ -1,4 +1,4 @@
-use crate::filter::{Filter, Reverb};
+use crate::filter::{Filter, Delay};
 use color_eyre::Result;
 use jack::PortFlags;
 
@@ -65,8 +65,8 @@ pub fn audio_setup() -> Result<(
     const FEEDBACK: f32 = 0.1;
     const WET: f32 = 1.0;
     let delay_samples = (client.sample_rate() * DELAY_MS) / 1000;
-    let mut monitor_delay = Reverb::new(delay_samples, FEEDBACK, WET);
-    let mut playback_delay = vec![Reverb::new(delay_samples, FEEDBACK, WET); 8];
+    let mut monitor_delay = Delay::new(delay_samples, FEEDBACK, WET);
+    let mut playback_delay = vec![Delay::new(delay_samples, FEEDBACK, WET); 8];
 
     let process_callback = move |client: &jack::Client, ps: &jack::ProcessScope| {
         let sample_rate = client.sample_rate() as u64;
@@ -238,7 +238,7 @@ pub fn audio_setup() -> Result<(
             for index in 0..8 {
                 if loop_looping[index] {
                     let dry_sample = loop_buffers[index][loop_pos[index]];
-                    // 再用另一條 delay line（鋪給「播放階段」的 reverb），得到 mixed
+                    // 再用另一條 delay line（鋪給「播放階段」的 delay），得到 mixed
                     let wet_sample = playback_delay[index].apply(dry_sample);
                     *out_sample += wet_sample;
                 }

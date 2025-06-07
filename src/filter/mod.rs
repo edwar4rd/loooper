@@ -1,5 +1,5 @@
-mod reverb;
-pub use reverb::Reverb;
+mod delay;
+pub use delay::Delay;
 
 pub trait Filter {
     /// Apply the filter to a single sample.
