@@ -334,6 +334,3 @@ pub struct AudioState {
 
 mod notifications;
 pub use notifications::Notifications;
-
-mod beat;
-pub use beat::TimeSignature;
