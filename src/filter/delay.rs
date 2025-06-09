@@ -133,7 +133,7 @@ impl Filter for Delay {
                 // and then increment the index, but use the old sample for the output.
                 let mut dev_null = 0.0;
                 let delayed_out = self.delay_line[self.idx];
-                
+
                 delay_sample(dry, delayed_out, &mut dev_null, self.feedback, self.wet)
             }
             None => {

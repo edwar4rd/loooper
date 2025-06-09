@@ -43,10 +43,9 @@ pub fn create_callback(settings: AudioCallbackSettings) -> impl jack::ProcessHan
     let mut countin_left = 0;
     let mut rolling = false;
     let mbpm_clone = mbpm.clone();
-    let mut phase = 0.0;
     let mut adsr = super::adsr::ADSR::new(0.01, 0.1, 0.2, 0.02);
-    let mut click_freq = 523.25 / 2.0;
     let mut click_vol = 0.2;
+    let mut click_osc = super::oscillator::Oscillator::new(523.25 / 2.0, sample_rate);
     let mut last_beat_pos = 0.999;
     let current_millibeat_clone = current_millibeat.clone();
     let mut current_beat = 0; // Which milli beat we're in, start at beat 1.0 -> 1000, including the count-in
@@ -98,7 +97,7 @@ pub fn create_callback(settings: AudioCallbackSettings) -> impl jack::ProcessHan
         if !last_enabled {
             // We just got enabled, reset relavent audio callback states
             audio_clock = 0;
-            click_freq = 523.25 / 2.0;
+            click_osc.set_freq(523.25 / 2.0);
         }
         last_enabled = true;
 
@@ -143,7 +142,7 @@ pub fn create_callback(settings: AudioCallbackSettings) -> impl jack::ProcessHan
                 adsr.reset();
 
                 // We change the metronome volume and frequency for different phases
-                click_freq = if countin_started {
+                let click_freq = if countin_started {
                     if countin_left == 0 {
                         countin_started = false;
                         let _ = rolling_tx.send(());
@@ -167,6 +166,7 @@ pub fn create_callback(settings: AudioCallbackSettings) -> impl jack::ProcessHan
                 } else {
                     440.0
                 };
+                click_osc.set_freq(click_freq);
                 click_vol = if rolling {
                     0.05
                 } else if countin_started {
@@ -242,11 +242,8 @@ pub fn create_callback(settings: AudioCallbackSettings) -> impl jack::ProcessHan
                     adsr.release();
                 }
                 let vol = adsr.forward(1.0 / (sample_rate as f32));
-                phase += 1.0 / (sample_rate as f32 / click_freq) * 2.0 * std::f32::consts::PI;
-                if phase > 2.0 * std::f32::consts::PI {
-                    phase -= 2.0 * std::f32::consts::PI;
-                }
-                let wave = phase.sin() * click_vol;
+
+                let wave = click_osc.increment() * click_vol;
                 let amp = vol * wave;
                 *out_sample += amp;
             }

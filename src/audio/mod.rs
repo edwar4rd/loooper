@@ -25,6 +25,7 @@ pub struct AudioState {
 mod adsr;
 mod callback;
 mod notifications;
+mod oscillator;
 
 pub fn audio_setup() -> Result<(
     jack::AsyncClient<impl jack::NotificationHandler, impl jack::ProcessHandler>,
