@@ -44,7 +44,7 @@ pub fn create_callback(settings: AudioCallbackSettings) -> impl jack::ProcessHan
     let mut rolling = false;
     let mbpm_clone = mbpm.clone();
     let mut phase = 0.0;
-    let mut adsr = crate::adsr::ADSR::new(0.01, 0.1, 0.2, 0.02);
+    let mut adsr = super::adsr::ADSR::new(0.01, 0.1, 0.2, 0.02);
     let mut click_freq = 523.25 / 2.0;
     let mut click_vol = 0.2;
     let mut last_beat_pos = 0.999;

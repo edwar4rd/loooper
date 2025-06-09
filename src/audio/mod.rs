@@ -22,8 +22,9 @@ pub struct AudioState {
     pub current_millibeat: Arc<AtomicU32>,            // Audio -> Main
 }
 
-mod notifications;
+mod adsr;
 mod callback;
+mod notifications;
 
 pub fn audio_setup() -> Result<(
     jack::AsyncClient<impl jack::NotificationHandler, impl jack::ProcessHandler>,
