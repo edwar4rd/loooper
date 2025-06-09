@@ -1,4 +1,4 @@
-use crate::filter::{Filter, Delay};
+use crate::filter::{Filter, Delay, Distortion};
 use color_eyre::Result;
 use jack::PortFlags;
 
@@ -61,12 +61,13 @@ pub fn audio_setup() -> Result<(
     let loop_recording_clone = loop_recording.clone();
     let mut loop_recording_start_beat = [0; 8];
 
-    const DELAY_MS: usize = 200;
+    const DELAY_MS: usize = 150;
     const FEEDBACK: f32 = 0.1;
     const WET: f32 = 1.0;
     let delay_samples = (client.sample_rate() * DELAY_MS) / 1000;
     let mut monitor_delay = Delay::new(delay_samples, FEEDBACK, WET);
     let mut playback_delay = vec![Delay::new(delay_samples, FEEDBACK, WET); 8];
+    let mut distortion = Distortion::new(2.0, 0.5);
 
     let process_callback = move |client: &jack::Client, ps: &jack::ProcessScope| {
         let sample_rate = client.sample_rate() as u64;
@@ -238,13 +239,14 @@ pub fn audio_setup() -> Result<(
             for index in 0..8 {
                 if loop_looping[index] {
                     let dry_sample = loop_buffers[index][loop_pos[index]];
-                    // 再用另一條 delay line（鋪給「播放階段」的 delay），得到 mixed
                     let wet_sample = playback_delay[index].apply(dry_sample);
                     *out_sample += wet_sample;
                 }
 
                 if loop_capturing[index] {
-                    loop_buffers[index][loop_pos[index]] = *in_sample;
+                    let original_sample = *in_sample;
+                    let distortion_sample = distortion.apply(original_sample);
+                    loop_buffers[index][loop_pos[index]] = distortion_sample;
                 }
 
                 if loop_looping[index] || loop_capturing[index] {

@@ -1,5 +1,7 @@
 mod delay;
+mod distortion;
 pub use delay::Delay;
+pub use distortion::Distortion;
 
 pub trait Filter {
     /// Apply the filter to a single sample.
