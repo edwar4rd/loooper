@@ -1,4 +1,4 @@
-use crate::filter::{Delay, Filter};
+use crate::filter::{Delay, Distortion, Filter, Wah};
 use std::sync::Arc;
 
 pub struct AudioCallbackSettings {
@@ -69,11 +69,18 @@ pub fn create_callback(settings: AudioCallbackSettings) -> impl jack::ProcessHan
     let mut loop_recording_start_beat = [0; 8];
 
     const DELAY_MS: usize = 250;
-    const FEEDBACK: f32 = 0.6;
+    const FEEDBACK: f32 = 0.4;
     const WET: f32 = 0.8;
     let delay_samples = (initial_sample_rate * DELAY_MS) / 1000;
     let mut monitor_delay = Delay::new(delay_samples, FEEDBACK, WET);
     let mut playback_delay = vec![Delay::new(delay_samples, FEEDBACK, WET); 8];
+    let mut distortion = Distortion::new(8.0, 0.5);
+    let mut wah = Wah::new(
+        initial_sample_rate as f32, 2.0,    // sweep at 2 Hz
+        500.0,  // min 500 Hz
+        3000.0, // max 3 kHz
+        0.8,
+    ); // resonance
 
     let callback_closure = move |_client: &jack::Client, ps: &jack::ProcessScope| {
         let sample_rate = initial_sample_rate as u64;
@@ -107,7 +114,8 @@ pub fn create_callback(settings: AudioCallbackSettings) -> impl jack::ProcessHan
             let current_subbeat = (beat_pos * 1000.0) as u32;
 
             // Set the sample to the input sample (monitoring)
-            *out_sample = monitor_delay.apply(*in_sample);
+            let temp_sample = distortion.apply(*in_sample);
+            *out_sample = monitor_delay.apply(temp_sample);
 
             // We entered a new beat
             if beat_pos < last_beat_pos {
@@ -245,13 +253,15 @@ pub fn create_callback(settings: AudioCallbackSettings) -> impl jack::ProcessHan
             for index in 0..8 {
                 if loop_looping[index] {
                     let dry_sample = loop_buffers[index][loop_pos[index]];
-                    // 再用另一條 delay line（鋪給「播放階段」的 delay），得到 mixed
                     let wet_sample = playback_delay[index].apply(dry_sample);
                     *out_sample += wet_sample;
                 }
 
                 if loop_capturing[index] {
-                    loop_buffers[index][loop_pos[index]] = *in_sample;
+                    let original_sample = *in_sample;
+                    let distortion_sample = distortion.apply(original_sample);
+                    //let wah_sample = wah.apply(distortion_sample);
+                    loop_buffers[index][loop_pos[index]] = distortion_sample;
                 }
 
                 if loop_looping[index] || loop_capturing[index] {
