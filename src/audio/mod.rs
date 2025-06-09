@@ -23,8 +23,6 @@ pub struct AudioState {
 }
 
 mod notifications;
-pub use notifications::Notifications;
-
 mod callback;
 
 pub fn audio_setup() -> Result<(
@@ -56,7 +54,7 @@ pub fn audio_setup() -> Result<(
         tx: message_tx.clone(),
     };
     let callback_handler = callback::create_callback(callback::AudioCallbackSettings {
-        initial_sample_rate: client.sample_rate(),
+        sample_rate: client.sample_rate(),
         in_port,
         out_port,
         enabled: enabled.clone(),

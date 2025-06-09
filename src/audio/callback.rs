@@ -2,7 +2,7 @@ use crate::filter::{Delay, Distortion, Filter, Wah};
 use std::sync::Arc;
 
 pub struct AudioCallbackSettings {
-    pub initial_sample_rate: usize,
+    pub sample_rate: usize,
     pub in_port: jack::Port<jack::AudioIn>,
     pub out_port: jack::Port<jack::AudioOut>,
     pub enabled: Arc<std::sync::atomic::AtomicBool>,
@@ -19,7 +19,7 @@ pub struct AudioCallbackSettings {
 
 pub fn create_callback(settings: AudioCallbackSettings) -> impl jack::ProcessHandler {
     let AudioCallbackSettings {
-        initial_sample_rate,
+        sample_rate,
         in_port,
         mut out_port,
         enabled,
@@ -53,8 +53,8 @@ pub fn create_callback(settings: AudioCallbackSettings) -> impl jack::ProcessHan
     // let tx_clone = tx.clone();
     let mut loop_buffers = (0..8)
         .map(|_| {
-            let mut buf_vec = Vec::<f32>::with_capacity(initial_sample_rate * 2 * 33);
-            buf_vec.resize(initial_sample_rate * 2 * 33, 0.0);
+            let mut buf_vec = Vec::<f32>::with_capacity(sample_rate * 2 * 33);
+            buf_vec.resize(sample_rate * 2 * 33, 0.0);
             buf_vec.into_boxed_slice()
         })
         .collect::<Vec<_>>();
@@ -71,12 +71,12 @@ pub fn create_callback(settings: AudioCallbackSettings) -> impl jack::ProcessHan
     const DELAY_MS: usize = 250;
     const FEEDBACK: f32 = 0.4;
     const WET: f32 = 0.8;
-    let delay_samples = (initial_sample_rate * DELAY_MS) / 1000;
+    let delay_samples = (sample_rate * DELAY_MS) / 1000;
     let mut monitor_delay = Delay::new(delay_samples, FEEDBACK, WET);
     let mut playback_delay = vec![Delay::new(delay_samples, FEEDBACK, WET); 8];
     let mut distortion = Distortion::new(8.0, 0.5);
-    let wah = Wah::new(
-        initial_sample_rate as f32,
+    let _wah = Wah::new(
+        sample_rate as f32,
         2.0,    // sweep at 2 Hz
         500.0,  // min 500 Hz
         3000.0, // max 3 kHz
@@ -84,7 +84,7 @@ pub fn create_callback(settings: AudioCallbackSettings) -> impl jack::ProcessHan
     ); // resonance
 
     let callback_closure = move |_client: &jack::Client, ps: &jack::ProcessScope| {
-        let sample_rate = initial_sample_rate as u64;
+        let sample_rate = sample_rate as u64;
         let in_port = in_port.as_slice(ps);
         let out_port = out_port.as_mut_slice(ps);
 
