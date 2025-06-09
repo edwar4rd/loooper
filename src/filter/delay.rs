@@ -103,13 +103,7 @@ impl Filter for Delay {
 /// # Returns
 ///
 /// 回傳單個 sample 經過混響後的最終值：`dry * (1–wet) + new_wet * wet`。
-fn delay_sample(
-    dry: f32,
-    delay_line: &mut [f32],
-    idx: &mut usize,
-    feedback: f32,
-    wet: f32,
-) -> f32 {
+fn delay_sample(dry: f32, delay_line: &mut [f32], idx: &mut usize, feedback: f32, wet: f32) -> f32 {
     debug_assert!((0.0..=1f32).contains(&wet));
     debug_assert!((0.0..=1f32).contains(&feedback));
 

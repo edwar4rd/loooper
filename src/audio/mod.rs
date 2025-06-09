@@ -66,9 +66,9 @@ pub fn audio_setup() -> Result<(
     let loop_recording_clone = loop_recording.clone();
     let mut loop_recording_start_beat = [0; 8];
 
-    const DELAY_MS: usize = 200;
-    const FEEDBACK: f32 = 0.1;
-    const WET: f32 = 1.0;
+    const DELAY_MS: usize = 250;
+    const FEEDBACK: f32 = 0.6;
+    const WET: f32 = 0.8;
     let delay_samples = (client.sample_rate() * DELAY_MS) / 1000;
     let mut monitor_delay = Delay::new(delay_samples, FEEDBACK, WET);
     let mut playback_delay = vec![Delay::new(delay_samples, FEEDBACK, WET); 8];
@@ -334,3 +334,6 @@ pub struct AudioState {
 
 mod notifications;
 pub use notifications::Notifications;
+
+mod beat;
+pub use beat::TimeSignature;
