@@ -106,7 +106,9 @@ pub fn audio_setup() -> Result<(
             let current_subbeat = (beat_pos * 1000.0) as u32;
 
             // Set the sample to the input sample (monitoring)
-            *out_sample = monitor_delay.apply(*in_sample);
+            let temp_sample = distortion.apply(*in_sample);
+            *out_sample = monitor_delay.apply(temp_sample);
+
 
             // We entered a new beat
             if beat_pos < last_beat_pos {
@@ -251,8 +253,8 @@ pub fn audio_setup() -> Result<(
                 if loop_capturing[index] {
                     let original_sample = *in_sample;
                     let distortion_sample = distortion.apply(original_sample);
-                    let wah_sample = wah.apply(distortion_sample);
-                    loop_buffers[index][loop_pos[index]] = wah_sample;
+                    //let wah_sample = wah.apply(distortion_sample);
+                    loop_buffers[index][loop_pos[index]] = distortion_sample;
                 }
 
                 if loop_looping[index] || loop_capturing[index] {
