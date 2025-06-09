@@ -1,11 +1,9 @@
+use crate::filter::{Filter, Delay};
 use color_eyre::Result;
-use jack::{Client, Control, PortFlags, ProcessScope};
+use jack::PortFlags;
 
 pub fn audio_setup() -> Result<(
-    jack::AsyncClient<
-        Notifications,
-        jack::contrib::ClosureProcessHandler<(), impl FnMut(&Client, &ProcessScope) -> Control>,
-    >,
+    jack::AsyncClient<impl jack::NotificationHandler, impl jack::ProcessHandler>,
     AudioState,
 )> {
     // TODO: Integrate logging with the gui thread
@@ -63,6 +61,13 @@ pub fn audio_setup() -> Result<(
     let loop_recording_clone = loop_recording.clone();
     let mut loop_recording_start_beat = [0; 8];
 
+    const DELAY_MS: usize = 200;
+    const FEEDBACK: f32 = 0.1;
+    const WET: f32 = 1.0;
+    let delay_samples = (client.sample_rate() * DELAY_MS) / 1000;
+    let mut monitor_delay = Delay::new(delay_samples, FEEDBACK, WET);
+    let mut playback_delay = vec![Delay::new(delay_samples, FEEDBACK, WET); 8];
+
     let process_callback = move |client: &jack::Client, ps: &jack::ProcessScope| {
         let sample_rate = client.sample_rate() as u64;
         let in_port = in_port.as_slice(ps);
@@ -95,7 +100,7 @@ pub fn audio_setup() -> Result<(
             let current_subbeat = (beat_pos * 1000.0) as u32;
 
             // Set the sample to the input sample (monitoring)
-            *out_sample = *in_sample;
+            *out_sample = monitor_delay.apply(*in_sample);
 
             // We entered a new beat
             if beat_pos < last_beat_pos {
@@ -232,7 +237,10 @@ pub fn audio_setup() -> Result<(
 
             for index in 0..8 {
                 if loop_looping[index] {
-                    *out_sample += loop_buffers[index][loop_pos[index]];
+                    let dry_sample = loop_buffers[index][loop_pos[index]];
+                    // 再用另一條 delay line（鋪給「播放階段」的 delay），得到 mixed
+                    let wet_sample = playback_delay[index].apply(dry_sample);
+                    *out_sample += wet_sample;
                 }
 
                 if loop_capturing[index] {
@@ -335,7 +343,7 @@ impl jack::NotificationHandler for Notifications {
         let _ = self.tx.send("JACK: thread init".to_string());
     }
 
-    /// Not much we can do here, see https://man7.org/linux/man-pages/man7/signal-safety.7.html.
+    /// Not much we can do here, see <https://man7.org/linux/man-pages/man7/signal-safety.7.html>.
     unsafe fn shutdown(&mut self, _: jack::ClientStatus, _: &str) {}
 
     fn freewheel(&mut self, _: &jack::Client, is_enabled: bool) {
