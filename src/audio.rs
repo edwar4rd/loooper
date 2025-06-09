@@ -1,4 +1,4 @@
-use crate::filter::{Filter, Delay, Distortion};
+use crate::filter::{Filter, Delay, Distortion, Wah};
 use color_eyre::Result;
 use jack::PortFlags;
 
@@ -68,6 +68,11 @@ pub fn audio_setup() -> Result<(
     let mut monitor_delay = Delay::new(delay_samples, FEEDBACK, WET);
     let mut playback_delay = vec![Delay::new(delay_samples, FEEDBACK, WET); 8];
     let mut distortion = Distortion::new(2.0, 0.5);
+    let sr = client.sample_rate() as f32;
+    let mut wah = Wah::new(sr, 2.0,    // sweep at 2 Hz
+                        500.0,       // min 500 Hz
+                        3000.0,      // max 3 kHz
+                        0.8);        // resonance
 
     let process_callback = move |client: &jack::Client, ps: &jack::ProcessScope| {
         let sample_rate = client.sample_rate() as u64;
@@ -246,7 +251,8 @@ pub fn audio_setup() -> Result<(
                 if loop_capturing[index] {
                     let original_sample = *in_sample;
                     let distortion_sample = distortion.apply(original_sample);
-                    loop_buffers[index][loop_pos[index]] = distortion_sample;
+                    let wah_sample = wah.apply(distortion_sample);
+                    loop_buffers[index][loop_pos[index]] = wah_sample;
                 }
 
                 if loop_looping[index] || loop_capturing[index] {
