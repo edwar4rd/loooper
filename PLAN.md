@@ -19,9 +19,12 @@
 
 ## Program Structure
 
-- The program can be split into two: the audio callback(cpal) and the main draw thread (ratatui).
+- The program can be split into two: the audio callback(jcak) and the main draw thread (ratatui).
   - The audio callback thread need to be strictly non-blocking, thus function calls like lock() cannot be used.
-  - 
+  - There will also be a (or possibly several) GPIO handling thread, but that's for later.
+- Audio effects are generalized into the `Filter` trait and are placed in the `filter` module.
+- The four phases in the program states have their own file: `setup.rs`, `prepare.rs`, `countin.rs`, `rolling.rs`.
+- Files in the `audio` module handle the logic of the audio callback.
 
 ## Progarm States
 
