@@ -133,8 +133,8 @@ impl Filter for Delay {
                 // and then increment the index, but use the old sample for the output.
                 let mut dev_null = 0.0;
                 let delayed_out = self.delay_line[self.idx];
-                let out = delay_sample(dry, delayed_out, &mut dev_null, self.feedback, self.wet);
-                out
+                
+                delay_sample(dry, delayed_out, &mut dev_null, self.feedback, self.wet)
             }
             None => {
                 let delayed_out = &mut self.delay_line[self.idx];
@@ -258,8 +258,6 @@ mod tests {
         delay.reset_delay();
         assert_eq!(delay.delay_line_length(), 4800);
         test_delay_with_const(&mut delay);
-
-        
     }
 
     fn test_delay_with_const(delay: &mut Delay) {

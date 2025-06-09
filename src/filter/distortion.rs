@@ -4,7 +4,7 @@ use crate::filter::Filter;
 #[derive(Debug, Clone, Copy)]
 pub struct Distortion {
     pub drive: f32,
-    pub mix:   f32,
+    pub mix: f32,
 }
 
 impl Distortion {

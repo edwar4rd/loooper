@@ -75,8 +75,9 @@ pub fn create_callback(settings: AudioCallbackSettings) -> impl jack::ProcessHan
     let mut monitor_delay = Delay::new(delay_samples, FEEDBACK, WET);
     let mut playback_delay = vec![Delay::new(delay_samples, FEEDBACK, WET); 8];
     let mut distortion = Distortion::new(8.0, 0.5);
-    let mut wah = Wah::new(
-        initial_sample_rate as f32, 2.0,    // sweep at 2 Hz
+    let wah = Wah::new(
+        initial_sample_rate as f32,
+        2.0,    // sweep at 2 Hz
         500.0,  // min 500 Hz
         3000.0, // max 3 kHz
         0.8,
