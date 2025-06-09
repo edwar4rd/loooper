@@ -1,6 +1,7 @@
 use color_eyre::Result;
 use loooper::{CountInState, PrepareState, RollingState, SetUpState, audio};
 use ratatui::{DefaultTerminal, Frame};
+use tokio::spawn;
 
 #[derive(Debug)]
 pub enum State {
@@ -19,6 +20,11 @@ async fn main() -> Result<()> {
         eprintln!("Failed to setup audio: {}", err);
         eprintln!("Is JACK started or pw-jack used?");
     })?;
+
+    let current_millibeat = audio_state.current_millibeat.clone();
+    spawn(async move {
+        loooper::blink::blink(current_millibeat).await;
+    });
 
     let terminal = ratatui::init();
     let state = State::default_with_audio_state(audio_state);
