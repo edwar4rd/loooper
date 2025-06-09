@@ -67,7 +67,7 @@ pub fn audio_setup() -> Result<(
     let delay_samples = (client.sample_rate() * DELAY_MS) / 1000;
     let mut monitor_delay = Delay::new(delay_samples, FEEDBACK, WET);
     let mut playback_delay = vec![Delay::new(delay_samples, FEEDBACK, WET); 8];
-    let mut distortion = Distortion::new(2.0, 0.5);
+    let mut distortion = Distortion::new(8.0, 0.5);
     let sr = client.sample_rate() as f32;
     let mut wah = Wah::new(sr, 2.0,    // sweep at 2 Hz
                         500.0,       // min 500 Hz
