@@ -41,7 +41,7 @@ impl Delay {
         Self {
             delay_line,
             delay_line_start: 0,
-            delay_line_end: sample_count,
+            delay_line_end: sample_count.saturating_sub(1),
             delay_line_desired_length: None,
             idx: 0,
             feedback,
@@ -55,33 +55,94 @@ impl Delay {
     pub fn reset_delay(&mut self) {
         // Reset the delay line to zero
         self.delay_line.fill(0.0);
+
+        // Reset the indices
+        let current_length = self.delay_line_length();
+        self.idx = 0;
+        self.delay_line_start = 0;
+        if let Some(desired_length) = self.delay_line_desired_length {
+            self.delay_line_end = desired_length.saturating_sub(1);
+            self.delay_line_desired_length = None;
+        } else {
+            self.delay_line_end = current_length.saturating_sub(1);
+        }
+        assert_eq!(self.delay_line_length(), current_length);
+    }
+
+    pub fn delay_line_length(&self) -> usize {
+        if self.delay_line_end > self.delay_line_start {
+            self.delay_line_end - self.delay_line_start + 1
+        } else {
+            self.delay_line.len() - self.delay_line_start + self.delay_line_end + 1
+        }
     }
 
     /// Try to "resize" the delay line.
     /// This function doesn't allocate new memory, and get as close as possible to the requested size.
     /// This function tries to not create any clicks in the audio stream or cause any audible artifacts.
     ///
-    /// If the new size is larger than the current size, it will fill the new space with zeros.
+    /// If the new size is larger than the current size, the current sample will be kept,
+    /// and the current sample will be repeated until the delay line reaches the new size.
     /// If the new size is smaller, samples will be dropped from the end of the delay line.
-    pub fn resize_delay(&mut self, new_size: usize) {
-        if new_size == self.delay_line.len() {
+    ///
+    /// The function will keep the delay line at the same note if
+    pub fn resize(&mut self, new_size: usize) {
+        let current_size = self.delay_line_length();
+        if new_size == current_size {
             return; // No change needed
         }
 
-        let target_size = new_size.min(self.delay_line.len());
-        self.delay_line_desired_length = Some(target_size);
+        if new_size < current_size {
+            self.delay_line_start += current_size - new_size;
+            if self.delay_line_start >= self.delay_line.len() {
+                self.delay_line_start -= self.delay_line.len();
+            }
+            assert_eq!(self.delay_line_length(), new_size);
+        } else {
+            let target_size = new_size.min(self.delay_line.len());
+            if current_size == target_size {
+                return; // No change possible
+            }
+
+            // TODO: make the delay line grow by repeating the last sample
+            // self.delay_line_desired_length = Some(target_size);
+            self.delay_line_end += target_size - current_size;
+            if self.delay_line_end >= self.delay_line.len() {
+                self.delay_line_end -= self.delay_line.len();
+            }
+            assert_eq!(self.delay_line_length(), target_size);
+        }
+    }
+}
+
+impl Delay {
+    fn increment_index(&mut self) {
+        if self.idx == self.delay_line_end {
+            self.idx = self.delay_line_start; // Wrap around if we reach the end of the delay line
+        } else {
+            self.idx += 1;
+        }
     }
 }
 
 impl Filter for Delay {
     fn apply(&mut self, dry: f32) -> f32 {
-        delay_sample(
-            dry,
-            &mut self.delay_line,
-            &mut self.idx,
-            self.feedback,
-            self.wet,
-        )
+        match self.delay_line_desired_length {
+            Some(_) => {
+                // If we are resizing the delay line, we need to write the sample at the current index
+                // and then increment the index, but use the old sample for the output.
+                let mut dev_null = 0.0;
+                let delayed_out = self.delay_line[self.idx];
+                let out = delay_sample(dry, delayed_out, &mut dev_null, self.feedback, self.wet);
+                out
+            }
+            None => {
+                let delayed_out = &mut self.delay_line[self.idx];
+                let out = delay_sample(dry, *delayed_out, delayed_out, self.feedback, self.wet);
+                self.increment_index();
+                out
+            }
+        }
     }
 }
 
@@ -90,9 +151,7 @@ impl Filter for Delay {
 /// # Arguments
 ///
 /// * `dry`           – 當前乾聲樣本 (input sample)。
-/// * `delay_line`    – 延遲線緩衝，長度為 delay_samples；此陣列會在呼叫時直接更新回音狀態。\
-///   以長度為零的 `delay_line` 呼叫此函數時將不會有任何回音效果。
-/// * `idx`           – 延遲線目前的讀寫位置 (circular buffer index)。傳入 &mut usize，內部會自動 +1 (wrapping)。
+/// * `delayed_out`   - 當前在 delay line 中的樣本。
 /// * `feedback`      – 反饋係數 (0.0–1.0)，控制回音衰減強度。
 /// * `wet`           – 濕聲比例 (0.0–1.0)，決定混合乾聲與回音的比重。
 ///
@@ -103,26 +162,12 @@ impl Filter for Delay {
 /// # Returns
 ///
 /// 回傳單個 sample 經過混響後的最終值：`dry * (1–wet) + new_wet * wet`。
-fn delay_sample(dry: f32, delay_line: &mut [f32], idx: &mut usize, feedback: f32, wet: f32) -> f32 {
+fn delay_sample(dry: f32, delayed_out: f32, new_written: &mut f32, feedback: f32, wet: f32) -> f32 {
     debug_assert!((0.0..=1f32).contains(&wet));
     debug_assert!((0.0..=1f32).contains(&feedback));
 
-    // 如果 delay 長為零就直接 bypass，只回傳乾聲
-    if delay_line.is_empty() {
-        return dry;
-    }
-
-    let delay_samples = delay_line.len();
-    let d_idx = *idx % delay_samples;
-    let delayed_out = delay_line[d_idx];
-
     let new_wet = dry + delayed_out * feedback;
-    delay_line[d_idx] = new_wet;
-
-    *idx = idx.wrapping_add(1);
-    if *idx >= delay_samples {
-        *idx -= delay_samples;
-    }
+    *new_written = new_wet;
 
     dry * (1.0 - wet) + new_wet * wet
 }
@@ -141,31 +186,137 @@ mod tests {
         assert_eq!(delay.feedback, FEEDBACK);
         assert_eq!(delay.wet, WET);
 
+        test_delay_with_const(&mut delay);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_delay_twice() {
+        const SAMPLE_COUNT: usize = 4800;
+        const FEEDBACK: f32 = 0.1;
+        const WET: f32 = 0.8;
+        let mut delay = Delay::new(SAMPLE_COUNT, FEEDBACK, WET);
+        test_delay_with_const(&mut delay);
+        test_delay_with_const(&mut delay);
+    }
+
+    #[test]
+    fn test_delay_twice_with_reset() {
+        const SAMPLE_COUNT: usize = 4800;
+        const FEEDBACK: f32 = 0.1;
+        const WET: f32 = 0.8;
+        let mut delay = Delay::new(SAMPLE_COUNT, FEEDBACK, WET);
+        test_delay_with_const(&mut delay);
+        delay.reset_delay();
+        test_delay_with_const(&mut delay);
+    }
+
+    #[test]
+    fn test_delay_length() {
+        const SAMPLE_COUNT: usize = 4800;
+        const FEEDBACK: f32 = 0.1;
+        const WET: f32 = 0.8;
+        let mut delay = Delay::new(SAMPLE_COUNT, FEEDBACK, WET);
+        assert_eq!(delay.delay_line_length(), SAMPLE_COUNT);
+
+        // Resize the delay line to a smaller size
+        delay.resize(2400);
+
+        // Run the delay for a while to give it time to finish resizing
+        for _ in 0..10 * SAMPLE_COUNT {
+            delay.apply(0.0);
+        }
+
+        // Now the delay line should be resized
+        assert_eq!(delay.delay_line_length(), 2400);
+        delay.reset_delay();
+        assert_eq!(delay.delay_line_length(), 2400);
+        test_delay_with_const(&mut delay);
+
+        delay.resize(3600);
+
+        // Run the delay for a while to give it time to finish resizing
+        for _ in 0..10 * SAMPLE_COUNT {
+            delay.apply(0.0);
+        }
+
+        // Now the delay line should be resized
+        assert_eq!(delay.delay_line_length(), 3600);
+        delay.reset_delay();
+        assert_eq!(delay.delay_line_length(), 3600);
+        test_delay_with_const(&mut delay);
+
+        delay.resize(6000);
+
+        // Run the delay for a while to give it time to finish resizing
+        for _ in 0..10 * SAMPLE_COUNT {
+            delay.apply(0.0);
+        }
+
+        // Now the delay line should be resized
+        assert_eq!(delay.delay_line_length(), 4800);
+        delay.reset_delay();
+        assert_eq!(delay.delay_line_length(), 4800);
+        test_delay_with_const(&mut delay);
+
+        
+    }
+
+    fn test_delay_with_const(delay: &mut Delay) {
+        let wet = delay.wet;
+        let feedback = delay.feedback;
+        let sample_count = delay.delay_line_length();
+
+        {
+            let in_sample = 0.5;
+            let out_sample = delay.apply(in_sample);
+            assert!(out_sample == in_sample);
+        }
         let in_sample = 0.665;
-        for _ in 0..SAMPLE_COUNT {
+        for _ in 1..sample_count {
             let out_sample = delay.apply(in_sample);
             assert!(out_sample == in_sample);
         }
 
-        let old_in_sample = in_sample;
-        let in_sample = 0.137;
-        for _ in 0..SAMPLE_COUNT {
+        {
+            let old_in_sample = 0.5;
+            let in_sample = 0.242;
             let out_sample = delay.apply(in_sample);
             assert_eq!(
                 out_sample,
-                in_sample * (1.0 - WET) + (in_sample + old_in_sample * FEEDBACK) * WET
+                in_sample * (1.0 - wet) + (in_sample + old_in_sample * feedback) * wet
+            );
+        }
+        let old_in_sample = in_sample;
+        let in_sample = 0.137;
+        for _ in 1..sample_count {
+            let out_sample = delay.apply(in_sample);
+            assert_eq!(
+                out_sample,
+                in_sample * (1.0 - wet) + (in_sample + old_in_sample * feedback) * wet
             );
         }
 
+        {
+            let old_old_sample = 0.5;
+            let old_in_sample = 0.242;
+            let in_sample = 0.326;
+            let out_sample = delay.apply(in_sample);
+            let old_written = old_in_sample + old_old_sample * feedback;
+            assert_eq!(
+                out_sample,
+                in_sample * (1.0 - wet) + (in_sample + old_written * feedback) * wet
+            );
+        }
         let old_old_sample = old_in_sample;
         let old_in_sample = in_sample;
         let in_sample = 0.999;
-        for _ in 0..SAMPLE_COUNT {
+        for _ in 1..sample_count {
             let out_sample = delay.apply(in_sample);
-            let old_written = old_in_sample + old_old_sample * FEEDBACK;
+            let old_written = old_in_sample + old_old_sample * feedback;
             assert_eq!(
                 out_sample,
-                in_sample * (1.0 - WET) + (in_sample + old_written * FEEDBACK) * WET
+                in_sample * (1.0 - wet) + (in_sample + old_written * feedback) * wet
             );
         }
     }
