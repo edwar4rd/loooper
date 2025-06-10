@@ -49,7 +49,10 @@ async fn display_image(
     }
 }
 
-pub async fn blink(current_millibeat: std::sync::Arc<std::sync::atomic::AtomicU32>) {
+pub async fn blink(
+    current_millibeat: std::sync::Arc<std::sync::atomic::AtomicU32>,
+    mut shutdown: tokio::sync::oneshot::Receiver<()>,
+) {
     let pi = wiringpi::setup();
     let data_pin = pi.output_pin(15);
     let latch_pin = pi.output_pin(16);
@@ -74,7 +77,8 @@ pub async fn blink(current_millibeat: std::sync::Arc<std::sync::atomic::AtomicU3
     let mut current_image = 0;
 
     latch_pin.digital_write(Value::Low);
-
+    shift_out(&clock_pin, &data_pin, BitOrder::LSBFirst, 255).await;
+    shift_out(&clock_pin, &data_pin, BitOrder::LSBFirst, 0).await;
     latch_pin.digital_write(Value::High);
 
     loop {
@@ -93,5 +97,17 @@ pub async fn blink(current_millibeat: std::sync::Arc<std::sync::atomic::AtomicU3
             current_image = current_beat as usize % IMAGE_COUNT;
             last_beat = current_beat;
         }
+
+        if shutdown.try_recv().is_ok() {
+            // If shutdown is requested, break the loop
+            break;
+        }
     }
+
+    // Ensure the latch is low before exiting
+    latch_pin.digital_write(Value::Low);
+    shift_out(&clock_pin, &data_pin, BitOrder::LSBFirst, 255).await;
+    shift_out(&clock_pin, &data_pin, BitOrder::LSBFirst, 0).await;
+    latch_pin.digital_write(Value::High);
+    latch_pin.digital_write(Value::Low);
 }

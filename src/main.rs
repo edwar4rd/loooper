@@ -22,14 +22,17 @@ async fn main() -> Result<()> {
     })?;
 
     let current_millibeat = audio_state.current_millibeat.clone();
-    spawn(async move {
-        loooper::blink::blink(current_millibeat).await;
+    let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+    let hardware_handle = spawn(async move {
+        loooper::blink::blink(current_millibeat, shutdown_rx).await;
     });
 
     let terminal = ratatui::init();
     let state = State::default_with_audio_state(audio_state);
 
     let result = state.run(terminal).await;
+    let _ = shutdown_tx.send(());
+    let _ = hardware_handle.await;
     drop(client);
     ratatui::restore();
     result
