@@ -1,5 +1,35 @@
 use crate::filter::{Delay, Distortion, Filter, Wah};
 use std::sync::Arc;
+use std::path::PathBuf;
+use tokio::sync::mpsc::UnboundedSender;
+use std::path::Path;
+use hound; // For reading WAV files
+
+struct SamplePad {
+    buffer: Vec<f32>,
+    pos: usize,
+    playing: bool,
+}
+
+impl SamplePad {
+    fn load_from_wav(path: &Path) -> color_eyre::Result<Self> {
+        let mut reader = hound::WavReader::open(path)?;
+        let buffer = reader
+            .samples::<i16>()
+            .map(|s| s.unwrap() as f32 / i16::MAX as f32)
+            .collect();
+        Ok(SamplePad { buffer, pos: 0, playing: false })
+    }
+    fn next_sample(&mut self) -> f32 {
+        if !self.playing { return 0.0; }
+        let s = self.buffer[self.pos];
+        self.pos += 1;
+        if self.pos >= self.buffer.len (){
+            self.playing = false;
+        }
+        s
+    }
+}
 
 pub struct AudioCallbackSettings {
     pub sample_rate: usize,
@@ -15,9 +45,13 @@ pub struct AudioCallbackSettings {
     pub loop_playing: Vec<Arc<std::sync::atomic::AtomicBool>>,
     pub loop_recording: Vec<Arc<std::sync::atomic::AtomicBool>>,
     pub current_millibeat: Arc<std::sync::atomic::AtomicU32>,
+    pub pad_tx: UnboundedSender<usize>,
 }
 
-pub fn create_callback(settings: AudioCallbackSettings) -> impl jack::ProcessHandler {
+pub fn create_callback(
+    settings: AudioCallbackSettings,
+    mut pad_rx: tokio::sync::mpsc::UnboundedReceiver<usize>,
+) -> impl jack::ProcessHandler {
     let AudioCallbackSettings {
         sample_rate,
         in_port,
@@ -32,6 +66,7 @@ pub fn create_callback(settings: AudioCallbackSettings) -> impl jack::ProcessHan
         loop_playing,
         loop_recording,
         current_millibeat,
+        pad_tx: _,
     } = settings;
 
     let mut audio_clock: u64 = 0; // using u32 should panic in about a day
@@ -82,6 +117,15 @@ pub fn create_callback(settings: AudioCallbackSettings) -> impl jack::ProcessHan
         0.8,
     ); // resonance
 
+    let pad_files = ["pad1.wav", "pad2.wav", "pad3.wav"];
+    let mut pads: Vec<SamplePad> = pad_files.iter().map(|file| {
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("src")
+            .join("sounds")
+            .join(file);
+        SamplePad::load_from_wav(&path).unwrap()
+    }).collect();
+
     let callback_closure = move |_client: &jack::Client, ps: &jack::ProcessScope| {
         let sample_rate = sample_rate as u64;
         let in_port = in_port.as_slice(ps);
@@ -106,6 +150,13 @@ pub fn create_callback(settings: AudioCallbackSettings) -> impl jack::ProcessHan
         let mspb = (60.0 / mbpm as f32 * 1000.0 * 1000.0) as u64;
 
         let mut countin_local = countin_clone.load(std::sync::atomic::Ordering::Relaxed);
+
+        while let Ok(idx) = pad_rx.try_recv() {
+            if let Some(pad) = pads.get_mut(idx) {
+                pad.pos = 0;
+                pad.playing = true;
+            }   
+        }
 
         for (in_sample, out_sample) in in_port.iter().zip(out_port.iter_mut()) {
             // Where we are inside a beat (0.0 - 1.0)
@@ -248,6 +299,18 @@ pub fn create_callback(settings: AudioCallbackSettings) -> impl jack::ProcessHan
                 *out_sample += amp;
             }
 
+            while let Ok(idx) = pad_rx.try_recv() {
+                if let Some(pad) = pads.get_mut(idx) {
+                    pad.pos = 0;
+                    pad.playing = true;
+                }
+            }
+
+            let mut pad_mix = 0.0;
+            for pad in pads.iter_mut() {
+                pad_mix += pad.next_sample();
+            }
+
             for index in 0..8 {
                 if loop_looping[index] {
                     let dry_sample = loop_buffers[index][loop_pos[index]];
@@ -259,7 +322,7 @@ pub fn create_callback(settings: AudioCallbackSettings) -> impl jack::ProcessHan
                     let original_sample = *in_sample;
                     let distortion_sample = distortion.apply(original_sample);
                     //let wah_sample = wah.apply(distortion_sample);
-                    loop_buffers[index][loop_pos[index]] = distortion_sample;
+                    loop_buffers[index][loop_pos[index]] = distortion_sample + pad_mix;
                 }
 
                 if loop_looping[index] || loop_capturing[index] {
