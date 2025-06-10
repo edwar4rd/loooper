@@ -121,7 +121,11 @@ impl CountInState {
             KeyCode::Up => self.select_priv(),
             KeyCode::Down => self.select_next(),
             KeyCode::Char(' ') => self.toggle_starting(),
+            KeyCode::Char('1') => { let _ = self.audio_state.pad_tx.send(0); }
+            KeyCode::Char('2') => { let _ = self.audio_state.pad_tx.send(1); }
+            KeyCode::Char('3') => { let _ = self.audio_state.pad_tx.send(2); }
             KeyCode::Enter => self.mark_recording(),
+
             _ => {}
         }
     }
