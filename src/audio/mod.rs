@@ -57,23 +57,25 @@ pub fn audio_setup() -> Result<(
     let notification_handler = notifications::Notifications {
         tx: message_tx.clone(),
     };
-    let callback_handler = callback::create_callback(callback::AudioCallbackSettings {
-        sample_rate: client.sample_rate(),
-        in_port,
-        out_port,
-        enabled: enabled.clone(),
-        countin: countin.clone(),
-        countin_length: countin_length.clone(),
-        rolling_tx,
-        mbpm: mbpm.clone(),
-        loop_length: loop_length.clone(),
-        loop_starting: loop_starting.clone(),
-        loop_playing: loop_playing.clone(),
-        loop_recording: loop_recording.clone(),
-        current_millibeat: current_millibeat.clone(),
-        pad_tx: pad_tx.clone(),
-    }, 
-    pad_rx,);
+    let callback_handler = callback::create_callback(
+        callback::AudioCallbackSettings {
+            sample_rate: client.sample_rate(),
+            in_port,
+            out_port,
+            enabled: enabled.clone(),
+            countin: countin.clone(),
+            countin_length: countin_length.clone(),
+            rolling_tx,
+            mbpm: mbpm.clone(),
+            loop_length: loop_length.clone(),
+            loop_starting: loop_starting.clone(),
+            loop_playing: loop_playing.clone(),
+            loop_recording: loop_recording.clone(),
+            current_millibeat: current_millibeat.clone(),
+            pad_tx: pad_tx.clone(),
+        },
+        pad_rx,
+    );
 
     let active_client = client.activate_async(notification_handler, callback_handler)?;
 

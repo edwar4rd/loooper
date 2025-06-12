@@ -1,9 +1,9 @@
 use crate::filter::{Delay, Distortion, Filter, Wah};
-use std::sync::Arc;
-use std::path::PathBuf;
-use tokio::sync::mpsc::UnboundedSender;
+use hound;
 use std::path::Path;
-use hound; // For reading WAV files
+use std::path::PathBuf;
+use std::sync::Arc;
+use tokio::sync::mpsc::UnboundedSender; // For reading WAV files
 
 struct SamplePad {
     buffer: Vec<f32>,
@@ -18,13 +18,19 @@ impl SamplePad {
             .samples::<i16>()
             .map(|s| s.unwrap() as f32 / i16::MAX as f32)
             .collect();
-        Ok(SamplePad { buffer, pos: 0, playing: false })
+        Ok(SamplePad {
+            buffer,
+            pos: 0,
+            playing: false,
+        })
     }
     fn next_sample(&mut self) -> f32 {
-        if !self.playing { return 0.0; }
+        if !self.playing {
+            return 0.0;
+        }
         let s = self.buffer[self.pos];
         self.pos += 1;
-        if self.pos >= self.buffer.len (){
+        if self.pos >= self.buffer.len() {
             self.playing = false;
         }
         s
@@ -106,7 +112,7 @@ pub fn create_callback(
     const FEEDBACK: f32 = 0.4;
     const WET: f32 = 0.8;
     let delay_samples = (sample_rate * DELAY_MS) / 1000;
-    let mut monitor_delay = Delay::new(delay_samples, FEEDBACK, WET);
+    let monitor_delay = Delay::new(delay_samples, FEEDBACK, WET);
     let mut playback_delay = vec![Delay::new(delay_samples, FEEDBACK, WET); 8];
     let mut distortion = Distortion::new(8.0, 0.5);
     let _wah = Wah::new(
@@ -118,13 +124,16 @@ pub fn create_callback(
     ); // resonance
 
     let pad_files = ["pad1.wav", "pad2.wav", "pad3.wav"];
-    let mut pads: Vec<SamplePad> = pad_files.iter().map(|file| {
-        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("src")
-            .join("sounds")
-            .join(file);
-        SamplePad::load_from_wav(&path).unwrap()
-    }).collect();
+    let mut pads: Vec<SamplePad> = pad_files
+        .iter()
+        .map(|file| {
+            let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("src")
+                .join("sounds")
+                .join(file);
+            SamplePad::load_from_wav(&path).unwrap()
+        })
+        .collect();
 
     //let mut pad_logged = false;
     let callback_closure = move |_client: &jack::Client, ps: &jack::ProcessScope| {

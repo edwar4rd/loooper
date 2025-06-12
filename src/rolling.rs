@@ -116,9 +116,15 @@ impl RollingState {
 
     fn handle_key_event(&mut self, key_event: KeyEvent) {
         match key_event.code {
-            KeyCode::Char('1') => { let _ = self.audio_state.pad_tx.send(0); }
-            KeyCode::Char('2') => { let _ = self.audio_state.pad_tx.send(1); }
-            KeyCode::Char('3') => { let _ = self.audio_state.pad_tx.send(2); }
+            KeyCode::Char('1') => {
+                let _ = self.audio_state.pad_tx.send(0);
+            }
+            KeyCode::Char('2') => {
+                let _ = self.audio_state.pad_tx.send(1);
+            }
+            KeyCode::Char('3') => {
+                let _ = self.audio_state.pad_tx.send(2);
+            }
             KeyCode::Char('q') => self.exit(),
             KeyCode::Esc => self.transititon(),
             KeyCode::Up => self.select_priv(),
