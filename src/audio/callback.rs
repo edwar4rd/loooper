@@ -1,9 +1,8 @@
-use crate::filter::{Delay, Distortion, Filter, Wah};
+// use crate::filter::{Delay, Distortion, Filter, Wah};
 use hound;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
-use tokio::sync::mpsc::UnboundedSender; // For reading WAV files
 
 struct SamplePad {
     buffer: Vec<f32>,
@@ -51,12 +50,11 @@ pub struct AudioCallbackSettings {
     pub loop_playing: Vec<Arc<std::sync::atomic::AtomicBool>>,
     pub loop_recording: Vec<Arc<std::sync::atomic::AtomicBool>>,
     pub current_millibeat: Arc<std::sync::atomic::AtomicU32>,
-    pub pad_tx: UnboundedSender<usize>,
+    pub pad_rx: tokio::sync::mpsc::UnboundedReceiver<usize>,
 }
 
 pub fn create_callback(
     settings: AudioCallbackSettings,
-    mut pad_rx: tokio::sync::mpsc::UnboundedReceiver<usize>,
 ) -> impl jack::ProcessHandler {
     let AudioCallbackSettings {
         sample_rate,
@@ -72,7 +70,7 @@ pub fn create_callback(
         loop_playing,
         loop_recording,
         current_millibeat,
-        pad_tx: _,
+        mut pad_rx,
     } = settings;
 
     let mut audio_clock: u64 = 0; // using u32 should panic in about a day
@@ -108,20 +106,20 @@ pub fn create_callback(
     let loop_recording_clone = loop_recording.clone();
     let mut loop_recording_start_beat = [0; 8];
 
-    const DELAY_MS: usize = 250;
-    const FEEDBACK: f32 = 0.4;
-    const WET: f32 = 0.8;
-    let delay_samples = (sample_rate * DELAY_MS) / 1000;
-    let monitor_delay = Delay::new(delay_samples, FEEDBACK, WET);
-    let mut playback_delay = vec![Delay::new(delay_samples, FEEDBACK, WET); 8];
-    let mut distortion = Distortion::new(8.0, 0.5);
-    let _wah = Wah::new(
-        sample_rate as f32,
-        2.0,    // sweep at 2 Hz
-        500.0,  // min 500 Hz
-        3000.0, // max 3 kHz
-        0.8,
-    ); // resonance
+    // const DELAY_MS: usize = 250;
+    // const FEEDBACK: f32 = 0.4;
+    // const WET: f32 = 0.8;
+    // let delay_samples = (sample_rate * DELAY_MS) / 1000;
+    // let monitor_delay = Delay::new(delay_samples, FEEDBACK, WET);
+    // let mut playback_delay = vec![Delay::new(delay_samples, FEEDBACK, WET); 8];
+    // let mut distortion = Distortion::new(8.0, 0.5);
+    // let wah = Wah::new(
+    //     sample_rate as f32,
+    //     2.0,    // sweep at 2 Hz
+    //     500.0,  // min 500 Hz
+    //     3000.0, // max 3 kHz
+    //     0.8,
+    // ); // resonance
 
     let pad_files = ["pad1.wav", "pad2.wav", "pad3.wav"];
     let mut pads: Vec<SamplePad> = pad_files
@@ -322,13 +320,13 @@ pub fn create_callback(
             for index in 0..8 {
                 if loop_looping[index] {
                     let dry_sample = loop_buffers[index][loop_pos[index]];
-                    let wet_sample = playback_delay[index].apply(dry_sample);
+                    // let wet_sample = playback_delay[index].apply(dry_sample);
                     *out_sample += dry_sample;
                 }
 
                 if loop_capturing[index] {
                     let original_sample = *in_sample;
-                    let distortion_sample = distortion.apply(original_sample);
+                    // let distortion_sample = distortion.apply(original_sample);
                     loop_buffers[index][loop_pos[index]] = original_sample + pad_mix;
                 }
 
