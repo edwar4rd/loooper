@@ -1,9 +1,11 @@
 mod delay;
 mod distortion;
 mod wa;
+mod reverb;
 pub use delay::Delay;
 pub use distortion::Distortion;
 pub use wa::Wah;
+pub use reverb::Reverb;
 
 pub trait Filter {
     /// Apply the filter to a single sample.

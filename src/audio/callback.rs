@@ -1,4 +1,4 @@
-use crate::filter::{Delay, Distortion, Filter, Wah};
+use crate::filter::{Delay, Distortion, Filter, Wah, Reverb};
 use std::sync::Arc;
 
 pub struct AudioCallbackSettings {
@@ -72,7 +72,7 @@ pub fn create_callback(settings: AudioCallbackSettings) -> impl jack::ProcessHan
     const WET: f32 = 0.8;
     let delay_samples = (sample_rate * DELAY_MS) / 1000;
     let mut monitor_delay = Delay::new(delay_samples, FEEDBACK, WET);
-    let mut playback_delay = vec![Delay::new(delay_samples, FEEDBACK, WET); 8];
+    //let mut playback_delay = vec![Delay::new(delay_samples, FEEDBACK, WET); 8];
     let mut distortion = Distortion::new(8.0, 0.5);
     let _wah = Wah::new(
         sample_rate as f32,
@@ -81,6 +81,15 @@ pub fn create_callback(settings: AudioCallbackSettings) -> impl jack::ProcessHan
         3000.0, // max 3 kHz
         0.8,
     ); // resonance
+
+    let mut reverb = Reverb::new(
+        sample_rate,            // e.g. 48_000
+        &[50, 56, 61, 68],      // comb delays in ms
+        0.84,                   // comb feedback
+        &[6, 7],                // all-pass delays in ms
+        0.5,                    // all-pass feedback
+        0.5,                    // overall wet-gain
+    );
 
     let callback_closure = move |_client: &jack::Client, ps: &jack::ProcessScope| {
         let sample_rate = sample_rate as u64;
@@ -251,7 +260,7 @@ pub fn create_callback(settings: AudioCallbackSettings) -> impl jack::ProcessHan
             for index in 0..8 {
                 if loop_looping[index] {
                     let dry_sample = loop_buffers[index][loop_pos[index]];
-                    let wet_sample = playback_delay[index].apply(dry_sample);
+                    let wet_sample = reverb.apply(dry_sample);
                     *out_sample += wet_sample;
                 }
 

@@ -1,5 +1,5 @@
 use crate::filter::Filter;
-
+use crate::filter::Delay;
 
 pub struct Reverb {
     combs: Vec<Delay>,
