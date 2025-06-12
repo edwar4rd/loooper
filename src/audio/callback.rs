@@ -1,40 +1,6 @@
 // use crate::filter::{Delay, Distortion, Filter, Wah};
-use hound;
-use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
-
-struct SamplePad {
-    buffer: Vec<f32>,
-    pos: usize,
-    playing: bool,
-}
-
-impl SamplePad {
-    fn load_from_wav(path: &Path) -> color_eyre::Result<Self> {
-        let mut reader = hound::WavReader::open(path)?;
-        let buffer = reader
-            .samples::<i16>()
-            .map(|s| s.unwrap() as f32 / i16::MAX as f32)
-            .collect();
-        Ok(SamplePad {
-            buffer,
-            pos: 0,
-            playing: false,
-        })
-    }
-    fn next_sample(&mut self) -> f32 {
-        if !self.playing {
-            return 0.0;
-        }
-        let s = self.buffer[self.pos];
-        self.pos += 1;
-        if self.pos >= self.buffer.len() {
-            self.playing = false;
-        }
-        s
-    }
-}
 
 pub struct AudioCallbackSettings {
     pub sample_rate: usize,
@@ -53,9 +19,7 @@ pub struct AudioCallbackSettings {
     pub pad_rx: tokio::sync::mpsc::UnboundedReceiver<usize>,
 }
 
-pub fn create_callback(
-    settings: AudioCallbackSettings,
-) -> impl jack::ProcessHandler {
+pub fn create_callback(settings: AudioCallbackSettings) -> impl jack::ProcessHandler {
     let AudioCallbackSettings {
         sample_rate,
         in_port,
@@ -122,14 +86,14 @@ pub fn create_callback(
     // ); // resonance
 
     let pad_files = ["pad1.wav", "pad2.wav", "pad3.wav"];
-    let mut pads: Vec<SamplePad> = pad_files
+    let mut pads: Box<[super::sample::SamplePad]> = pad_files
         .iter()
         .map(|file| {
             let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
                 .join("src")
                 .join("sounds")
                 .join(file);
-            SamplePad::load_from_wav(&path).unwrap()
+            super::sample::SamplePad::load_from_wav(&path).unwrap()
         })
         .collect();
 

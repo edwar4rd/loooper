@@ -27,6 +27,7 @@ mod adsr;
 mod callback;
 mod notifications;
 mod oscillator;
+mod sample;
 
 pub fn audio_setup() -> Result<(
     jack::AsyncClient<impl jack::NotificationHandler, impl jack::ProcessHandler>,
