@@ -126,6 +126,7 @@ pub fn create_callback(
         SamplePad::load_from_wav(&path).unwrap()
     }).collect();
 
+    //let mut pad_logged = false;
     let callback_closure = move |_client: &jack::Client, ps: &jack::ProcessScope| {
         let sample_rate = sample_rate as u64;
         let in_port = in_port.as_slice(ps);
@@ -152,10 +153,11 @@ pub fn create_callback(
         let mut countin_local = countin_clone.load(std::sync::atomic::Ordering::Relaxed);
 
         while let Ok(idx) = pad_rx.try_recv() {
+            //println!("🔔 Pad hit: slot {}!", idx);
             if let Some(pad) = pads.get_mut(idx) {
                 pad.pos = 0;
                 pad.playing = true;
-            }   
+            }
         }
 
         for (in_sample, out_sample) in in_port.iter().zip(out_port.iter_mut()) {
@@ -165,8 +167,8 @@ pub fn create_callback(
             let current_subbeat = (beat_pos * 1000.0) as u32;
 
             // Set the sample to the input sample (monitoring)
-            let temp_sample = distortion.apply(*in_sample);
-            *out_sample = monitor_delay.apply(temp_sample);
+            //let temp_sample = distortion.apply(*in_sample);
+            //*out_sample = monitor_delay.apply(temp_sample);
 
             // We entered a new beat
             if beat_pos < last_beat_pos {
@@ -299,30 +301,26 @@ pub fn create_callback(
                 *out_sample += amp;
             }
 
-            while let Ok(idx) = pad_rx.try_recv() {
-                if let Some(pad) = pads.get_mut(idx) {
-                    pad.pos = 0;
-                    pad.playing = true;
-                }
-            }
-
             let mut pad_mix = 0.0;
             for pad in pads.iter_mut() {
                 pad_mix += pad.next_sample();
             }
+            //if pad_mix != 0.0 && !pad_logged {
+            //    println!("✅ Pad mix first non‐zero sample: {:.6}", pad_mix);
+            //    pad_logged = true;
+            //}
 
             for index in 0..8 {
                 if loop_looping[index] {
                     let dry_sample = loop_buffers[index][loop_pos[index]];
                     let wet_sample = playback_delay[index].apply(dry_sample);
-                    *out_sample += wet_sample;
+                    *out_sample += dry_sample;
                 }
 
                 if loop_capturing[index] {
                     let original_sample = *in_sample;
                     let distortion_sample = distortion.apply(original_sample);
-                    //let wah_sample = wah.apply(distortion_sample);
-                    loop_buffers[index][loop_pos[index]] = distortion_sample + pad_mix;
+                    loop_buffers[index][loop_pos[index]] = original_sample + pad_mix;
                 }
 
                 if loop_looping[index] || loop_capturing[index] {
