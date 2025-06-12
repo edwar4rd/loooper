@@ -15,6 +15,7 @@ pub struct AudioCallbackSettings {
     pub loop_playing: Vec<Arc<std::sync::atomic::AtomicBool>>,
     pub loop_recording: Vec<Arc<std::sync::atomic::AtomicBool>>,
     pub current_millibeat: Arc<std::sync::atomic::AtomicU32>,
+    pub drum_index: Arc<std::sync::atomic::AtomicU32>,
 }
 
 pub fn create_callback(settings: AudioCallbackSettings) -> impl jack::ProcessHandler {
@@ -32,6 +33,7 @@ pub fn create_callback(settings: AudioCallbackSettings) -> impl jack::ProcessHan
         loop_playing,
         loop_recording,
         current_millibeat,
+        drum_index,
     } = settings;
 
     let mut audio_clock: u64 = 0; // using u32 should panic in about a day
@@ -49,6 +51,7 @@ pub fn create_callback(settings: AudioCallbackSettings) -> impl jack::ProcessHan
     let mut last_beat_pos = 0.999;
     let current_millibeat_clone = current_millibeat.clone();
     let mut current_beat = 0; // Which milli beat we're in, start at beat 1.0 -> 1000, including the count-in
+    let drum_index_clone = drum_index.clone();
     // let tx_clone = tx.clone();
     let mut loop_buffers = (0..8)
         .map(|_| {
@@ -104,6 +107,8 @@ pub fn create_callback(settings: AudioCallbackSettings) -> impl jack::ProcessHan
         // Get bpm * 1000 from the gui thread (this is currently only altered during SetUp -> Prepare)
         let mbpm = mbpm_clone.load(std::sync::atomic::Ordering::Relaxed);
         let mspb = (60.0 / mbpm as f32 * 1000.0 * 1000.0) as u64;
+
+        let drum_index = drum_index_clone.load(std::sync::atomic::Ordering::Relaxed);
 
         let mut countin_local = countin_clone.load(std::sync::atomic::Ordering::Relaxed);
 

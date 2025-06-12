@@ -30,6 +30,8 @@ pub struct CountInState {
     pub event_stream: EventStream,
     /// The audio state.
     pub audio_state: AudioState,
+    /// The index of the currently selected drum.
+    pub drum_index: u32,
 }
 
 impl CountInState {
@@ -76,6 +78,7 @@ impl CountInState {
             loops: prepare_state.loops,
             event_stream: prepare_state.event_stream,
             audio_state: prepare_state.audio_state,
+            drum_index: prepare_state.drum_index,
         }
     }
 }
@@ -152,6 +155,13 @@ impl Widget for &CountInState {
 
         let bpm = self.mbpm as f64 / 1000.;
         let mut texts = vec![Line::from(vec!["BPM: ".into(), bpm.to_string().yellow()])];
+
+        let drum_line = Line::from(vec![
+            "Drum: ".into(),
+            format!("{}", self.drum_index).yellow(), // +1 if you want 1–5 instead of 0–4
+        ]);
+        texts.push(drum_line);
+
         for (index, loop_state) in self.loops.iter().enumerate() {
             let loop_text = Line::from(vec![
                 if self.selected == index {

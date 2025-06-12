@@ -28,6 +28,8 @@ pub struct PrepareState {
     pub event_stream: EventStream,
     /// The audio state.
     pub audio_state: AudioState,
+    /// The index of the currently selected drum.
+    pub drum_index: u32,
 }
 
 impl PrepareState {
@@ -68,6 +70,7 @@ impl PrepareState {
             loops: setup_state.loops,
             event_stream: setup_state.event_stream,
             audio_state: setup_state.audio_state,
+            drum_index: setup_state.drum_index,
         }
     }
 }
@@ -137,6 +140,13 @@ impl Widget for &PrepareState {
         let mut texts = Vec::new();
         let counter_line = Line::from(vec!["BPM: ".into(), bpm.to_string().yellow()]);
         texts.push(counter_line);
+
+        let drum_line = Line::from(vec![
+            "Drum: ".into(),
+            format!("{}", self.drum_index).yellow(), // +1 if you want 1–5 instead of 0–4
+        ]);
+        texts.push(drum_line);
+
         for (i, loop_state) in self.loops.iter().enumerate() {
             let loop_text = Line::from(vec![
                 if loop_state.starting {

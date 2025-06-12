@@ -30,6 +30,8 @@ pub struct RollingState {
     pub event_stream: EventStream,
     /// The audio state.
     pub audio_state: AudioState,
+    /// The index of the currently selected drum.
+    pub drum_index: u32,
 }
 
 impl RollingState {
@@ -75,6 +77,7 @@ impl RollingState {
             loops: countin_state.loops,
             event_stream: countin_state.event_stream,
             audio_state: countin_state.audio_state,
+            drum_index: countin_state.drum_index,
         }
     }
 }
@@ -89,7 +92,7 @@ impl RollingState {
     }
 
     fn select_next(&mut self) {
-        if self.selected + 1 >= self.loops.len() {
+        if self.selected >= self.loops.len() {
             self.selected = 0;
         } else {
             self.selected += 1;
@@ -98,7 +101,7 @@ impl RollingState {
 
     fn select_priv(&mut self) {
         if self.selected == 0 {
-            self.selected = self.loops.len() - 1;
+            self.selected = self.loops.len();
         } else {
             self.selected -= 1;
         }
@@ -167,29 +170,52 @@ impl Widget for &RollingState {
             )
             .into(),
         ])];
+
+        let drum_line = Line::from(vec![
+            if self.selected == 0 {
+                ">> ".green()
+            } else {
+                "".into()
+            },
+            // if self.audio_state.loop_starting[0].load(std::sync::atomic::Ordering::Relaxed)
+            // {
+            //     "🟢".green()
+            // } else {
+            //     "🟥".red()
+            // },
+            if self.audio_state.loop_playing[0].load(std::sync::atomic::Ordering::Relaxed) {
+                "▶️".green()
+            } else {
+                "⏹️".black()
+            },
+            " Drum: ".into(),
+            format!("{}", self.drum_index).yellow(), // +1 if you want 1–5 instead of 0–4
+        ]);
+        texts.push(drum_line);
+
         for (index, loop_state) in self.loops.iter().enumerate() {
             let loop_text = Line::from(vec![
-                if self.selected == index {
+                if self.selected == index + 1{
                     ">> ".green()
                 } else {
                     "".into()
                 },
-                if self.audio_state.loop_starting[index].load(std::sync::atomic::Ordering::Relaxed)
+                if self.audio_state.loop_starting[index + 1].load(std::sync::atomic::Ordering::Relaxed)
                 {
                     "🟢".green()
                 } else {
                     "🟥".red()
                 },
-                if self.audio_state.loop_playing[index].load(std::sync::atomic::Ordering::Relaxed) {
+                if self.audio_state.loop_playing[index + 1].load(std::sync::atomic::Ordering::Relaxed) {
                     "▶️".green()
-                } else if self.audio_state.loop_recording[index]
+                } else if self.audio_state.loop_recording[index + 1]
                     .load(std::sync::atomic::Ordering::Relaxed)
                 {
                     "⏺️".black()
                 } else {
                     "⏹️".black()
                 },
-                format!(" Loop {}: ", index + 1).into(),
+                format!(" Loop {}: ", index).into(),
                 format!("{} beats, ", loop_state.beat_count).yellow(),
                 if loop_state.layering {
                     "layering".green()

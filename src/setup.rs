@@ -13,6 +13,7 @@ use ratatui::{
     text::{Line, Text},
     widgets::{Block, Paragraph, Widget},
 };
+pub const DRUM_NUM: u32 = 6;
 
 #[derive(Debug)]
 pub struct SetUpState {
@@ -32,6 +33,8 @@ pub struct SetUpState {
     pub event_stream: EventStream,
     /// The audio state.
     pub audio_state: AudioState,
+    /// The index of the currently selected drum.
+    pub drum_index: u32,
     /// The serial number of the last error.
     error_count: usize,
     /// The last error message.
@@ -53,6 +56,7 @@ impl SetUpState {
             }],
             event_stream: EventStream::new(),
             audio_state,
+            drum_index: 0,
             error_count: 0,
             last_error: String::new(),
         }
@@ -111,6 +115,7 @@ impl SetUpState {
             }],
             event_stream: rolling_state.event_stream,
             audio_state: rolling_state.audio_state,
+            drum_index: rolling_state.drum_index,
             error_count: 0,
             last_error: String::new(),
         }
@@ -156,7 +161,7 @@ impl SetUpState {
 
     /// Add a new loop to the list of loops
     fn add_loop(&mut self) {
-        if self.loops.len() >= 8 {
+        if self.loops.len() >= 7 {
             return;
         }
         let new_loop = LoopState {
@@ -169,7 +174,9 @@ impl SetUpState {
 
     fn decrement(&mut self) {
         if self.selected == 0 {
-            self.decrement_bpm();
+            self.decrement_bpm(); 
+        } else if self.selected == 1 {
+            self.decrement_drum();
         } else if let Some(loop_state) = self.loops.get_mut(self.selected - 1) {
             loop_state.beat_count = 1.max(loop_state.beat_count - 1);
         }
@@ -178,9 +185,11 @@ impl SetUpState {
     fn increment(&mut self) {
         if self.selected == 0 {
             self.increment_bpm();
+        } else if self.selected == 1 {
+            self.increment_drum();
         } else if let Some(loop_state) = self.loops.get_mut(self.selected - 1) {
             loop_state.beat_count = 32.min(loop_state.beat_count + 1);
-        }
+        } 
     }
 
     /// Increment the BPM by the current precision, while keeping the maximum bpm to 3000
@@ -205,10 +214,22 @@ impl SetUpState {
         }
     }
 
+    fn increment_drum(&mut self) {                     
+        self.drum_index = (self.drum_index + 1) % DRUM_NUM;
+    }
+
+    fn decrement_drum(&mut self) {                       
+        if self.drum_index == 0 {
+            self.drum_index = DRUM_NUM - 1;
+        } else {
+            self.drum_index -= 1;
+        }
+    }
+
     fn select_next(&mut self) {
         if self.selected == 0 {
             self.selected = 1;
-        } else if self.selected >= self.loops.len() {
+        } else if self.selected >= self.loops.len() + 1{
             self.selected = 0;
         } else {
             self.selected += 1;
@@ -217,7 +238,7 @@ impl SetUpState {
 
     fn select_priv(&mut self) {
         if self.selected == 0 {
-            self.selected = self.loops.len();
+            self.selected = self.loops.len() + 1;
         } else {
             self.selected -= 1;
         }
@@ -226,8 +247,10 @@ impl SetUpState {
     fn toggle_autostart(&mut self) {
         if self.selected == 0 {
             return;
+        } else if self.selected == 1 {
+            return; 
         }
-        if let Some(loop_state) = self.loops.get_mut(self.selected - 1) {
+        if let Some(loop_state) = self.loops.get_mut(self.selected - 2) {
             loop_state.starting = !loop_state.starting;
         }
     }
@@ -235,8 +258,10 @@ impl SetUpState {
     fn toggle_layering(&mut self) {
         if self.selected == 0 {
             return;
+        } else if self.selected == 1 {
+            return; 
         }
-        if let Some(loop_state) = self.loops.get_mut(self.selected - 1) {
+        if let Some(loop_state) = self.loops.get_mut(self.selected - 2) {
             loop_state.layering = !loop_state.layering;
         }
     }
@@ -255,16 +280,22 @@ impl Widget for &SetUpState {
         let instructions = Line::from(vec![
             if self.selected == 0 {
                 " Precision ".into()
+            } else if self.selected == 1 {
+                "".into()
             } else {
                 " Autostart ".into()
             },
-            "<Tab>".blue().bold(),
-            if self.selected == 0 {
+            if self.selected == 1 {
+                "".into()
+            } else {
+                "<Tab>".blue().bold()
+            },
+            if self.selected == 0 || self.selected == 1 {
                 "".into()
             } else {
                 " Toggle Layering ".into()
             },
-            if self.selected == 0 {
+            if self.selected == 0 || self.selected == 1 {
                 "".into()
             } else {
                 "<L>".blue().bold()
@@ -295,9 +326,21 @@ impl Widget for &SetUpState {
             format!(" (+/-{})", self.precision as f32 / 1000.).italic(),
         ]);
         texts.push(counter_line);
+
+        let drum_line = Line::from(vec![
+            if self.selected == 1 {
+                ">> ".green()
+            } else {
+                "".into()
+            },
+            "Drum: ".into(),
+            format!("{}", self.drum_index).yellow(), // +1 if you want 1–5 instead of 0–4
+        ]);
+        texts.push(drum_line);
+
         for (i, loop_state) in self.loops.iter().enumerate() {
             let loop_text = Line::from(vec![
-                if self.selected == i + 1 {
+                if self.selected == i + 2 {
                     ">> ".green()
                 } else {
                     "".into()
