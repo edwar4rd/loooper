@@ -30,7 +30,7 @@ fn shift_out(
     }
 }
 
-async fn display_image(
+fn display_image(
     data_pin: &OutputPin<WiringPi>,
     latch_pin: &OutputPin<WiringPi>,
     clock_pin: &OutputPin<WiringPi>,
