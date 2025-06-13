@@ -1,4 +1,4 @@
-use crate::filter::{Delay, Distortion, Filter, Wah};
+use crate::filter::{Delay, Distortion, Filter, Wah, Reverb};
 use std::sync::Arc;
 
 pub struct AudioCallbackSettings {
@@ -91,6 +91,16 @@ pub fn create_callback(settings: AudioCallbackSettings) -> impl jack::ProcessHan
         0.8,
     ); // resonance
 
+
+        let mut reverb = Reverb::new(
+        sample_rate,            // e.g. 48_000
+        &[50, 56, 61, 68],      // comb delays in ms
+        0.84,                   // comb feedback
+        &[6, 7],                // all-pass delays in ms
+        0.5,                    // all-pass feedback
+        0.5,                    // overall wet-gain
+    );
+    
     let callback_closure = move |_client: &jack::Client, ps: &jack::ProcessScope| {
         let sample_rate = sample_rate as u64;
         let in_port = in_port.as_slice(ps);
@@ -122,7 +132,9 @@ pub fn create_callback(settings: AudioCallbackSettings) -> impl jack::ProcessHan
                 / ((sample_rate * mspb / 1000) as f32);
             let current_subbeat = (beat_pos * 1000.0) as u32;
 
-            *out_sample = 0.0;
+            // Set the sample to the input sample (monitoring) todo!!!
+            let temp_sample = distortion.apply(*in_sample);
+            *out_sample = monitor_delay.apply(temp_sample);
 
             // We entered a new beat
             if beat_pos < last_beat_pos {
