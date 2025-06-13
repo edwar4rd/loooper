@@ -19,6 +19,17 @@ impl SamplePad {
 
     pub fn load_from_wav(path: &Path) -> color_eyre::Result<Self> {
         let mut reader = hound::WavReader::open(path)?;
+        let spec = reader.spec();
+        assert!(
+            spec.channels == 1,
+            "Only mono samples are supported, found {} channels",
+            spec.channels
+        );
+        assert!(
+            spec.sample_format == hound::SampleFormat::Int,
+            "Only integer samples are supported, found {:?}",
+            spec.sample_format
+        );
         let buffer = reader
             .samples::<i16>()
             .map(|s| s.unwrap() as f32 / i16::MAX as f32)
