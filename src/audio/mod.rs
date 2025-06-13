@@ -20,12 +20,14 @@ pub struct AudioState {
     pub loop_playing: Vec<Arc<AtomicBool>>,           // Audio -> Main
     pub loop_recording: Vec<Arc<AtomicBool>>,         // Audio -> Main
     pub current_millibeat: Arc<AtomicU32>,            // Audio -> Main
+    pub pad_tx: mpsc::UnboundedSender<usize>,
 }
 
 mod adsr;
 mod callback;
 mod notifications;
 mod oscillator;
+mod sample;
 
 pub fn audio_setup() -> Result<(
     jack::AsyncClient<impl jack::NotificationHandler, impl jack::ProcessHandler>,
@@ -51,6 +53,7 @@ pub fn audio_setup() -> Result<(
     let loop_playing: Vec<_> = (0..8).map(|_| Arc::from(AtomicBool::new(false))).collect();
     let loop_recording: Vec<_> = (0..8).map(|_| Arc::from(AtomicBool::new(false))).collect();
     let current_millibeat = Arc::new(AtomicU32::new(0));
+    let (pad_tx, pad_rx) = tokio::sync::mpsc::unbounded_channel::<usize>();
 
     let notification_handler = notifications::Notifications {
         tx: message_tx.clone(),
@@ -69,6 +72,7 @@ pub fn audio_setup() -> Result<(
         loop_playing: loop_playing.clone(),
         loop_recording: loop_recording.clone(),
         current_millibeat: current_millibeat.clone(),
+        pad_rx,
     });
     let active_client = client.activate_async(notification_handler, callback_handler)?;
 
@@ -111,6 +115,7 @@ pub fn audio_setup() -> Result<(
         loop_playing,
         loop_recording,
         current_millibeat,
+        pad_tx,
     };
     Ok((active_client, state))
 }

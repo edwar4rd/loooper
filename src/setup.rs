@@ -150,6 +150,15 @@ impl SetUpState {
             KeyCode::Char('p') => panic!("Manual panic!"),
             KeyCode::Char('a') => self.add_loop(),
             KeyCode::Char('l') => self.toggle_layering(),
+            KeyCode::Char('1') => {
+                let _ = self.audio_state.pad_tx.send(0);
+            }
+            KeyCode::Char('2') => {
+                let _ = self.audio_state.pad_tx.send(1);
+            }
+            KeyCode::Char('3') => {
+                let _ = self.audio_state.pad_tx.send(2);
+            }
             _ => {}
         }
     }
