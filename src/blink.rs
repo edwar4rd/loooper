@@ -54,9 +54,9 @@ pub async fn blink(
     mut shutdown: tokio::sync::oneshot::Receiver<()>,
 ) {
     let pi = wiringpi::setup();
-    let data_pin = pi.output_pin(15);
-    let latch_pin = pi.output_pin(16);
-    let clock_pin = pi.output_pin(27);
+    let data_pin = pi.output_pin(12);
+    let latch_pin = pi.output_pin(10);
+    let clock_pin = pi.output_pin(14);
 
     let interval = time::Duration::from_micros(100);
     let mut last_beat = 0;
