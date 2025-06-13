@@ -1,7 +1,6 @@
 use color_eyre::Result;
 use loooper::{CountInState, PrepareState, RollingState, SetUpState, audio};
 use ratatui::{DefaultTerminal, Frame};
-use tokio::spawn;
 
 #[derive(Debug)]
 pub enum State {
@@ -32,7 +31,7 @@ async fn main() -> Result<()> {
 
     let result = state.run(terminal).await;
     let _ = shutdown_tx.send(());
-    let _ = blink_handle.await;
+    let _ = blink_handle.join();
     drop(client);
     ratatui::restore();
     result
