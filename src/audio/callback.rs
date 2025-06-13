@@ -86,7 +86,7 @@ pub fn create_callback(settings: AudioCallbackSettings) -> impl jack::ProcessHan
         0.8,
     ); // resonance
 
-    let pad_files = ["pad1.wav", "pad2.wav", "pad3.wav"];
+    let pad_files = ["pad1.wav", "pad2.wav", "pad3.wav", "pad4.wav"];
     let pads: Box<[SamplePad]> = pad_files
         .iter()
         .map(|file| {

@@ -130,6 +130,9 @@ impl CountInState {
             KeyCode::Char('3') => {
                 let _ = self.audio_state.pad_tx.send(2);
             }
+            KeyCode::Char('4') => {
+                let _ = self.audio_state.pad_tx.send(3);
+            }
             KeyCode::Enter => self.mark_recording(),
             _ => {}
         }
