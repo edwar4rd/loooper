@@ -6,6 +6,9 @@ pub struct LoopState {
     pub starting: bool,
     /// Whether the loop should be layered on top of prievious recording.
     pub layering: bool,
+    pub wah: bool,
+    pub reverb: bool,
+    pub distortion: bool,
 }
 
 impl Default for LoopState {
@@ -14,6 +17,9 @@ impl Default for LoopState {
             beat_count: 4,
             starting: false,
             layering: false,
+            wah: false,
+            reverb: false,
+            distortion: false,
         }
     }
 }

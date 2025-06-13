@@ -17,6 +17,9 @@ pub struct AudioState {
     pub loop_length: Vec<Arc<AtomicU32>>,             // Main -> Audio
     pub loop_starting: Vec<Arc<AtomicBool>>,          // Main -> Audio
     pub loop_layering: Vec<Arc<AtomicBool>>,          // Main -> Audio
+    pub loop_wah:      Vec<Arc<AtomicBool>>,          // Main -> Audio
+    pub loop_reverb:   Vec<Arc<AtomicBool>>,          // Main -> Audio
+    pub loop_distortion: Vec<Arc<AtomicBool>>,       // Main -> Audio
     pub loop_playing: Vec<Arc<AtomicBool>>,           // Audio -> Main
     pub loop_recording: Vec<Arc<AtomicBool>>,         // Audio -> Main
     pub current_millibeat: Arc<AtomicU32>,            // Audio -> Main
@@ -48,6 +51,9 @@ pub fn audio_setup() -> Result<(
     let loop_length: Vec<_> = (0..8).map(|_| Arc::from(AtomicU32::new(4))).collect();
     let loop_starting: Vec<_> = (0..8).map(|_| Arc::from(AtomicBool::new(false))).collect();
     let loop_layering: Vec<_> = (0..8).map(|_| Arc::from(AtomicBool::new(false))).collect();
+    let loop_wah: Vec<_> = (0..8).map(|_| Arc::from(AtomicBool::new(false))).collect();
+    let loop_reverb: Vec<_> = (0..8).map(|_| Arc::from(AtomicBool::new(false))).collect();
+    let loop_distortion: Vec<_> = (0..8).map(|_| Arc::from(AtomicBool::new(false))).collect();
     let loop_playing: Vec<_> = (0..8).map(|_| Arc::from(AtomicBool::new(false))).collect();
     let loop_recording: Vec<_> = (0..8).map(|_| Arc::from(AtomicBool::new(false))).collect();
     let current_millibeat = Arc::new(AtomicU32::new(0));
@@ -66,6 +72,9 @@ pub fn audio_setup() -> Result<(
         mbpm: mbpm.clone(),
         loop_length: loop_length.clone(),
         loop_starting: loop_starting.clone(),
+        loop_wah: loop_wah.clone(),
+        loop_reverb: loop_reverb.clone(),
+        loop_distortion: loop_distortion.clone(),
         loop_playing: loop_playing.clone(),
         loop_recording: loop_recording.clone(),
         current_millibeat: current_millibeat.clone(),
@@ -108,6 +117,9 @@ pub fn audio_setup() -> Result<(
         loop_length,
         loop_starting,
         loop_layering,
+        loop_wah,
+        loop_reverb,
+        loop_distortion,
         loop_playing,
         loop_recording,
         current_millibeat,

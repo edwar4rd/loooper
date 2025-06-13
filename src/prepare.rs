@@ -139,6 +139,21 @@ impl Widget for &PrepareState {
         texts.push(counter_line);
         for (i, loop_state) in self.loops.iter().enumerate() {
             let loop_text = Line::from(vec![
+                if loop_state.wah {
+                    "W".set_style(Color::Rgb(255, 0, 0)).bold()
+                } else {
+                    "W".set_style(Color::Rgb(128, 128, 128)).bold()
+                },
+                if loop_state.reverb {
+                    "R".set_style(Color::Rgb(0, 255, 0)).bold()
+                } else {
+                    "R".set_style(Color::Rgb(128, 128, 128)).bold()
+                },
+                if loop_state.distortion {
+                    "D".set_style(Color::Rgb(0, 0, 255)).bold()
+                } else {
+                    "D".set_style(Color::Rgb(128, 128, 128)).bold()
+                },
                 if loop_state.starting {
                     "🟢".green()
                 } else {

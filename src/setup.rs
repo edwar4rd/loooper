@@ -50,6 +50,9 @@ impl SetUpState {
                 beat_count: 4,
                 starting: true,
                 layering: false,
+                wah: false,
+                reverb: false,
+                distortion: false,
             }],
             event_stream: EventStream::new(),
             audio_state,
@@ -108,6 +111,9 @@ impl SetUpState {
                 beat_count: 4,
                 starting: true,
                 layering: false,
+                wah: false,
+                reverb: false,
+                distortion: false,
             }],
             event_stream: rolling_state.event_stream,
             audio_state: rolling_state.audio_state,
@@ -150,6 +156,9 @@ impl SetUpState {
             KeyCode::Char('p') => panic!("Manual panic!"),
             KeyCode::Char('a') => self.add_loop(),
             KeyCode::Char('l') => self.toggle_layering(),
+            KeyCode::Char('w') => self.toggle_wah(),
+            KeyCode::Char('r') => self.toggle_reverb(),
+            KeyCode::Char('d') => self.toggle_distortion(),
             _ => {}
         }
     }
@@ -163,6 +172,9 @@ impl SetUpState {
             beat_count: 4,
             starting: false,
             layering: false,
+            wah: false,
+            reverb: false,
+            distortion: false,
         };
         self.loops.push(new_loop);
     }
@@ -240,6 +252,33 @@ impl SetUpState {
             loop_state.layering = !loop_state.layering;
         }
     }
+
+    fn toggle_wah(&mut self) {
+        if self.selected == 0 {
+            return;
+        }
+        if let Some(loop_state) = self.loops.get_mut(self.selected - 1) {
+            loop_state.wah = !loop_state.wah;
+        }
+    }
+
+    fn toggle_reverb(&mut self) {
+        if self.selected == 0 {
+            return;
+        }
+        if let Some(loop_state) = self.loops.get_mut(self.selected - 1) {
+            loop_state.reverb = !loop_state.reverb;
+        }
+    }
+
+    fn toggle_distortion(&mut self) {
+        if self.selected == 0 {
+            return;
+        }
+        if let Some(loop_state) = self.loops.get_mut(self.selected - 1) {
+            loop_state.distortion = !loop_state.distortion;
+        }
+    }
 }
 
 impl Widget for &SetUpState {
@@ -301,6 +340,21 @@ impl Widget for &SetUpState {
                     ">> ".green()
                 } else {
                     "".into()
+                },
+                if loop_state.wah {
+                    "W".set_style(Color::Rgb(255, 0, 0)).bold()
+                } else {
+                    "W".set_style(Color::Rgb(128, 128, 128)).bold()
+                },
+                if loop_state.reverb {
+                    "R".set_style(Color::Rgb(0, 255, 0)).bold()
+                } else {
+                    "R".set_style(Color::Rgb(128, 128, 128)).bold()
+                },
+                if loop_state.distortion {
+                    "D".set_style(Color::Rgb(0, 0, 255)).bold()
+                } else {
+                    "D".set_style(Color::Rgb(128, 128, 128)).bold()
                 },
                 if loop_state.starting {
                     "🟢".green()

@@ -12,6 +12,9 @@ pub struct AudioCallbackSettings {
     pub mbpm: Arc<std::sync::atomic::AtomicU32>,
     pub loop_length: Vec<Arc<std::sync::atomic::AtomicU32>>,
     pub loop_starting: Vec<Arc<std::sync::atomic::AtomicBool>>,
+    pub loop_wah: Vec<Arc<std::sync::atomic::AtomicBool>>,
+    pub loop_reverb: Vec<Arc<std::sync::atomic::AtomicBool>>,
+    pub loop_distortion: Vec<Arc<std::sync::atomic::AtomicBool>>,
     pub loop_playing: Vec<Arc<std::sync::atomic::AtomicBool>>,
     pub loop_recording: Vec<Arc<std::sync::atomic::AtomicBool>>,
     pub current_millibeat: Arc<std::sync::atomic::AtomicU32>,
@@ -29,6 +32,9 @@ pub fn create_callback(settings: AudioCallbackSettings) -> impl jack::ProcessHan
         mbpm,
         loop_length,
         loop_starting,
+        loop_wah,
+        loop_reverb,
+        loop_distortion,
         loop_playing,
         loop_recording,
         current_millibeat,
@@ -63,6 +69,9 @@ pub fn create_callback(settings: AudioCallbackSettings) -> impl jack::ProcessHan
     let mut loop_pos = [0usize; 8];
     let loop_length_clone = loop_length.clone();
     let loop_starting_clone = loop_starting.clone();
+    let loop_wah_clone = loop_wah.clone();
+    let loop_reverb_clone = loop_reverb.clone();
+    let loop_distortion_clone = loop_distortion.clone();
     let loop_playing_clone = loop_playing.clone();
     let loop_recording_clone = loop_recording.clone();
     let mut loop_recording_start_beat = [0; 8];
@@ -74,7 +83,7 @@ pub fn create_callback(settings: AudioCallbackSettings) -> impl jack::ProcessHan
     let mut monitor_delay = Delay::new(delay_samples, FEEDBACK, WET);
     let mut playback_delay = vec![Delay::new(delay_samples, FEEDBACK, WET); 8];
     let mut distortion = Distortion::new(8.0, 0.5);
-    let _wah = Wah::new(
+    let mut wah = Wah::new(
         sample_rate as f32,
         2.0,    // sweep at 2 Hz
         500.0,  // min 500 Hz
@@ -114,8 +123,8 @@ pub fn create_callback(settings: AudioCallbackSettings) -> impl jack::ProcessHan
             let current_subbeat = (beat_pos * 1000.0) as u32;
 
             // Set the sample to the input sample (monitoring)
-            let temp_sample = distortion.apply(*in_sample);
-            *out_sample = monitor_delay.apply(temp_sample);
+            //let temp_sample = distortion.apply(*in_sample);
+            //*out_sample = monitor_delay.apply(temp_sample);
 
             // We entered a new beat
             if beat_pos < last_beat_pos {
@@ -250,16 +259,25 @@ pub fn create_callback(settings: AudioCallbackSettings) -> impl jack::ProcessHan
 
             for index in 0..8 {
                 if loop_looping[index] {
-                    let dry_sample = loop_buffers[index][loop_pos[index]];
-                    let wet_sample = playback_delay[index].apply(dry_sample);
-                    *out_sample += wet_sample;
+                    *out_sample += loop_buffers[index][loop_pos[index]];
                 }
 
                 if loop_capturing[index] {
-                    let original_sample = *in_sample;
-                    let distortion_sample = distortion.apply(original_sample);
-                    //let wah_sample = wah.apply(distortion_sample);
-                    loop_buffers[index][loop_pos[index]] = distortion_sample;
+                    let sample0 = *in_sample;
+                    let mut sample1 = 0.0;
+                    let mut sample2 = 0.0;
+                    if loop_distortion_clone[index].load(std::sync::atomic::Ordering::Relaxed) {
+                        sample1 = distortion.apply(sample0);
+                        //printf!("Distortion applied to loop {}", index);
+                    }else{
+                        sample1 = sample0;
+                    }
+                    if loop_wah_clone[index].load(std::sync::atomic::Ordering::Relaxed) {
+                        sample2 = wah.apply(sample1);
+                    } else {
+                        sample2 = sample1;
+                    }
+                    loop_buffers[index][loop_pos[index]] = sample2;
                 }
 
                 if loop_looping[index] || loop_capturing[index] {

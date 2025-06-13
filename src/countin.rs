@@ -159,6 +159,21 @@ impl Widget for &CountInState {
                 } else {
                     "".into()
                 },
+                                if loop_state.wah {
+                    "W".set_style(Color::Rgb(255, 0, 0)).bold()
+                } else {
+                    "W".set_style(Color::Rgb(128, 128, 128)).bold()
+                },
+                if loop_state.reverb {
+                    "R".set_style(Color::Rgb(0, 255, 0)).bold()
+                } else {
+                    "R".set_style(Color::Rgb(128, 128, 128)).bold()
+                },
+                if loop_state.distortion {
+                    "D".set_style(Color::Rgb(0, 0, 255)).bold()
+                } else {
+                    "D".set_style(Color::Rgb(128, 128, 128)).bold()
+                },
                 if self.audio_state.loop_starting[index].load(std::sync::atomic::Ordering::Relaxed)
                 {
                     "🟢".green()
