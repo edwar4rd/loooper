@@ -1,4 +1,4 @@
-use tokio::time;
+use std::{thread, time};
 use wiringpi::pin::{OutputPin, Value, WiringPi};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -7,7 +7,7 @@ enum BitOrder {
     MSBFirst,
 }
 
-async fn shift_out(
+fn shift_out(
     clock_pin: &OutputPin<WiringPi>,
     data_pin: &OutputPin<WiringPi>,
     order: BitOrder,
@@ -42,14 +42,14 @@ async fn display_image(
         latch_pin.digital_write(Value::Low);
         let b = 1 << i;
         let a = (image >> (i * 8)) as u8;
-        shift_out(clock_pin, data_pin, BitOrder::LSBFirst, !b).await;
-        shift_out(clock_pin, data_pin, BitOrder::MSBFirst, a).await;
-        time::sleep(interval).await;
+        shift_out(clock_pin, data_pin, BitOrder::LSBFirst, !b);
+        shift_out(clock_pin, data_pin, BitOrder::MSBFirst, a);
+        thread::sleep(interval);
         latch_pin.digital_write(Value::High);
     }
 }
 
-pub async fn blink(
+pub fn blink(
     current_millibeat: std::sync::Arc<std::sync::atomic::AtomicU32>,
     mut shutdown: tokio::sync::oneshot::Receiver<()>,
 ) {
@@ -77,8 +77,8 @@ pub async fn blink(
     let mut current_image = 0;
 
     latch_pin.digital_write(Value::Low);
-    shift_out(&clock_pin, &data_pin, BitOrder::LSBFirst, 255).await;
-    shift_out(&clock_pin, &data_pin, BitOrder::LSBFirst, 0).await;
+    shift_out(&clock_pin, &data_pin, BitOrder::LSBFirst, 255);
+    shift_out(&clock_pin, &data_pin, BitOrder::LSBFirst, 0);
     latch_pin.digital_write(Value::High);
 
     loop {
@@ -88,8 +88,7 @@ pub async fn blink(
             &clock_pin,
             interval,
             IMAGES[current_image],
-        )
-        .await;
+        );
 
         let current_beat = current_millibeat.load(std::sync::atomic::Ordering::Relaxed) / 1000;
         if current_beat != last_beat {
@@ -106,8 +105,8 @@ pub async fn blink(
 
     // Ensure the latch is low before exiting
     latch_pin.digital_write(Value::Low);
-    shift_out(&clock_pin, &data_pin, BitOrder::LSBFirst, 255).await;
-    shift_out(&clock_pin, &data_pin, BitOrder::LSBFirst, 0).await;
+    shift_out(&clock_pin, &data_pin, BitOrder::LSBFirst, 255);
+    shift_out(&clock_pin, &data_pin, BitOrder::LSBFirst, 0);
     latch_pin.digital_write(Value::High);
     latch_pin.digital_write(Value::Low);
 }
