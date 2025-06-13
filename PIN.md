@@ -21,8 +21,8 @@
 |    Button 05 |   5 |  21 | GPIO.21 |   IN | 1 | 29 || 30 |   |      | 0v      |     |     |          GND |
 |    Button 06 |   6 |  22 | GPIO.22 |   IN | 1 | 31 || 32 | 0 | IN   | GPIO.26 | 26  | 12  |    Button 12 |
 |    Button 07 |  13 |  23 | GPIO.23 |   IN | 0 | 33 || 34 |   |      | 0v      |     |     |          GND |
-|            - |  19 |  24 | GPIO.24 | ALT0 | 0 | 35 || 36 | 0 | IN   | GPIO.27 | 27  | 16  |    Button 13 |
-| WM8960 LRCLK |  26 |  25 | GPIO.25 |   IN | 0 | 37 || 38 | 0 | ALT0 | GPIO.28 | 28  | 20  |  WM8960 ADAT |
+| WM8960 LRCLK |  19 |  24 | GPIO.24 | ALT0 | 0 | 35 || 36 | 0 | IN   | GPIO.27 | 27  | 16  |    Button 13 |
+|            - |  26 |  25 | GPIO.25 |   IN | 0 | 37 || 38 | 0 | ALT0 | GPIO.28 | 28  | 20  |  WM8960 ADAT |
 |   HP OUT GND |     |     |      0v |      |   | 39 || 40 | 0 | ALT0 | GPIO.29 | 29  | 21  |  WM8960 DDAT |
 +--------------+-----+-----+---------+------+---+----++----+---+------+---------+-----+-----+--------------+
 |     Function | BCM | wPi |   Name  | Mode | V | Physical | V | Mode | Name    | wPi | BCM |     Function |
