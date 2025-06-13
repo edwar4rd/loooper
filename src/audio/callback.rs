@@ -122,9 +122,7 @@ pub fn create_callback(settings: AudioCallbackSettings) -> impl jack::ProcessHan
                 / ((sample_rate * mspb / 1000) as f32);
             let current_subbeat = (beat_pos * 1000.0) as u32;
 
-            // Set the sample to the input sample (monitoring)
-            //let temp_sample = distortion.apply(*in_sample);
-            //*out_sample = monitor_delay.apply(temp_sample);
+            *out_sample = 0.0;
 
             // We entered a new beat
             if beat_pos < last_beat_pos {
@@ -263,21 +261,19 @@ pub fn create_callback(settings: AudioCallbackSettings) -> impl jack::ProcessHan
                 }
 
                 if loop_capturing[index] {
-                    let sample0 = *in_sample;
-                    let mut sample1 = 0.0;
-                    let mut sample2 = 0.0;
-                    if loop_distortion_clone[index].load(std::sync::atomic::Ordering::Relaxed) {
-                        sample1 = distortion.apply(sample0);
-                        //printf!("Distortion applied to loop {}", index);
-                    }else{
-                        sample1 = sample0;
-                    }
-                    if loop_wah_clone[index].load(std::sync::atomic::Ordering::Relaxed) {
-                        sample2 = wah.apply(sample1);
-                    } else {
-                        sample2 = sample1;
-                    }
-                    loop_buffers[index][loop_pos[index]] = sample2;
+                    let processed = {
+                        let d = if loop_distortion_clone[index].load(std::sync::atomic::Ordering::Relaxed) {
+                            distortion.apply(*in_sample)
+                        } else {
+                            *in_sample
+                        };
+                        if loop_wah_clone[index].load(std::sync::atomic::Ordering::Relaxed) {
+                            wah.apply(d)
+                        } else {
+                            d
+                        }
+                    };
+                    loop_buffers[index][loop_pos[index]] = processed;
                 }
 
                 if loop_looping[index] || loop_capturing[index] {
