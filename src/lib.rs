@@ -7,5 +7,6 @@ pub mod countin;
 pub use countin::CountInState;
 pub mod rolling;
 pub use rolling::RollingState;
+pub mod blink;
 pub mod filter;
 pub mod loops;
