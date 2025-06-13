@@ -1,13 +1,11 @@
-use std::num::NonZeroU32;
 use std::path::Path;
 use std::sync::Arc;
 
 #[derive(Debug, Clone)]
 pub struct SamplePad {
-    pub buffer: Arc<[f32]>,
-    pub pos: usize,
-    pub playing: bool,
-    pub reset_scheduled: Option<NonZeroU32>,
+    buffer: Arc<[f32]>,
+    pos: usize,
+    playing: bool,
 }
 
 impl SamplePad {
@@ -16,7 +14,6 @@ impl SamplePad {
             buffer: Arc::new([]),
             pos: 0,
             playing: false,
-            reset_scheduled: None,
         }
     }
 
@@ -30,16 +27,18 @@ impl SamplePad {
             buffer,
             pos: 0,
             playing: false,
-            reset_scheduled: None,
         })
     }
 
     pub fn start(&mut self) {
-        if !self.playing {
+        if !self.playing && !self.buffer.is_empty() {
             self.pos = 0;
             self.playing = true;
-            self.reset_scheduled = None;
         }
+    }
+
+    pub fn ended(&self) -> bool {
+        !self.playing
     }
 
     pub fn next_sample(&mut self) -> f32 {
@@ -52,5 +51,11 @@ impl SamplePad {
             self.playing = false;
         }
         s
+    }
+}
+
+impl Default for SamplePad {
+    fn default() -> Self {
+        Self::empty()
     }
 }

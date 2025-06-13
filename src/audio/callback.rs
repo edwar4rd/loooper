@@ -2,6 +2,8 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use super::sample::SamplePad;
+
 pub struct AudioCallbackSettings {
     pub sample_rate: usize,
     pub in_port: jack::Port<jack::AudioIn>,
@@ -86,18 +88,20 @@ pub fn create_callback(settings: AudioCallbackSettings) -> impl jack::ProcessHan
     // ); // resonance
 
     let pad_files = ["pad1.wav", "pad2.wav", "pad3.wav"];
-    let mut pads: Box<[super::sample::SamplePad]> = pad_files
+    let pads: Box<[SamplePad]> = pad_files
         .iter()
         .map(|file| {
             let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
                 .join("src")
                 .join("sounds")
                 .join(file);
-            super::sample::SamplePad::load_from_wav(&path).unwrap()
+            SamplePad::load_from_wav(&path).unwrap_or_default()
         })
         .collect();
+    const MAX_ACTIVE_PADS: usize = 8;
+    let mut active_pads: [Option<SamplePad>; MAX_ACTIVE_PADS] = [const { None }; MAX_ACTIVE_PADS];
+    let mut active_pad_count: usize = 0;
 
-    //let mut pad_logged = false;
     let callback_closure = move |_client: &jack::Client, ps: &jack::ProcessScope| {
         let sample_rate = sample_rate as u64;
         let in_port = in_port.as_slice(ps);
@@ -124,10 +128,14 @@ pub fn create_callback(settings: AudioCallbackSettings) -> impl jack::ProcessHan
         let mut countin_local = countin_clone.load(std::sync::atomic::Ordering::Relaxed);
 
         while let Ok(idx) = pad_rx.try_recv() {
-            //println!("🔔 Pad hit: slot {}!", idx);
-            if let Some(pad) = pads.get_mut(idx) {
-                pad.pos = 0;
-                pad.playing = true;
+            if active_pad_count >= MAX_ACTIVE_PADS {
+                continue;
+            }
+            if let Some(pad) = pads.get(idx) {
+                let new_pad_index = active_pads.iter().position(|p| p.is_none()).unwrap();
+                active_pads[new_pad_index] = Some(pad.clone());
+                active_pads[new_pad_index].as_mut().unwrap().start();
+                active_pad_count += 1;
             }
         }
 
@@ -140,6 +148,7 @@ pub fn create_callback(settings: AudioCallbackSettings) -> impl jack::ProcessHan
             // Set the sample to the input sample (monitoring)
             //let temp_sample = distortion.apply(*in_sample);
             //*out_sample = monitor_delay.apply(temp_sample);
+            *out_sample = *in_sample;
 
             // We entered a new beat
             if beat_pos < last_beat_pos {
@@ -273,14 +282,28 @@ pub fn create_callback(settings: AudioCallbackSettings) -> impl jack::ProcessHan
             }
 
             let mut pad_mix = 0.0;
-            for pad in pads.iter_mut() {
-                pad_mix += pad.next_sample();
+            for pad in active_pads.iter_mut() {
+                if pad.is_none() {
+                    continue;
+                }
+                let some_pad = pad.as_mut().unwrap();
+                if some_pad.ended() {
+                    *pad = None;
+                    active_pad_count -= 1;
+                    continue;
+                } else {
+                    let sample = some_pad.next_sample();
+                    pad_mix += sample;
+                    if some_pad.ended() {
+                        *pad = None;
+                        active_pad_count -= 1;
+                        continue;
+                    }
+                }
             }
-            //if pad_mix != 0.0 && !pad_logged {
-            //    println!("✅ Pad mix first non‐zero sample: {:.6}", pad_mix);
-            //    pad_logged = true;
-            //}
+            *out_sample += pad_mix;
 
+            let mut pad_mix_used = false;
             for index in 0..8 {
                 if loop_looping[index] {
                     let dry_sample = loop_buffers[index][loop_pos[index]];
@@ -291,7 +314,11 @@ pub fn create_callback(settings: AudioCallbackSettings) -> impl jack::ProcessHan
                 if loop_capturing[index] {
                     let original_sample = *in_sample;
                     // let distortion_sample = distortion.apply(original_sample);
-                    loop_buffers[index][loop_pos[index]] = original_sample + pad_mix;
+                    loop_buffers[index][loop_pos[index]] = original_sample;
+                    if !pad_mix_used {
+                        loop_buffers[index][loop_pos[index]] += pad_mix;
+                        pad_mix_used = true;
+                    }
                 }
 
                 if loop_looping[index] || loop_capturing[index] {
