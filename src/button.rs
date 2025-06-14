@@ -32,7 +32,10 @@ pub fn button(
                 }
                 let _ = button_tx.send(button_id);
             } else {
-                *last_state = false;
+                if pin_state == Value::High {
+                    // Button released
+                    *last_state = false;
+                }
             }
         }
 
