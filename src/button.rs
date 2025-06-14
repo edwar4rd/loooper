@@ -5,6 +5,7 @@ const BUTTON_PINS: [u16; 13] = [23, 22, 21, 3, 2, 0, 7, 27, 26, 15, 16, 5, 6];
 
 pub fn button(
     pad_tx: tokio::sync::mpsc::UnboundedSender<usize>,
+    button_tx: tokio::sync::mpsc::UnboundedSender<usize>,
     mut shutdown: tokio::sync::oneshot::Receiver<()>,
 ) {
     let pi = wiringpi::setup();
@@ -29,6 +30,7 @@ pub fn button(
                     let pad_id = button_id - 9;
                     let _ = pad_tx.send(pad_id);
                 }
+                let _ = button_tx.send(button_id);
             } else {
                 *last_state = false;
             }

@@ -24,16 +24,17 @@ async fn main() -> Result<()> {
     let pad_tx = audio_state.pad_tx.clone();
     let (blink_shutdown_tx, blink_shutdown_rx) = tokio::sync::oneshot::channel();
     let (button_shutdown_tx, button_shutdown_rx) = tokio::sync::oneshot::channel();
+    let (button_tx, button_rx) = tokio::sync::mpsc::unbounded_channel();
 
     let blink_handle = std::thread::spawn(move || {
         loooper::blink::blink(current_millibeat, blink_shutdown_rx);
     });
     let button_handle = std::thread::spawn(move || {
-        loooper::button::button(pad_tx, button_shutdown_rx);
+        loooper::button::button(pad_tx, button_tx, button_shutdown_rx);
     });
 
     let terminal = ratatui::init();
-    let state = State::default_with_audio_state(audio_state);
+    let state = State::default_with_audio_state(audio_state, button_rx);
 
     let result = state.run(terminal).await;
     let _ = blink_shutdown_tx.send(());
@@ -46,8 +47,11 @@ async fn main() -> Result<()> {
 }
 
 impl State {
-    fn default_with_audio_state(audio_state: audio::AudioState) -> Self {
-        State::SetUp(SetUpState::default_with_audio_state(audio_state))
+    fn default_with_audio_state(
+        audio_state: audio::AudioState,
+        button_rx: tokio::sync::mpsc::UnboundedReceiver<usize>,
+    ) -> Self {
+        State::SetUp(SetUpState::default_with_audio_state(audio_state, button_rx))
     }
 
     async fn run(mut self, mut terminal: DefaultTerminal) -> Result<()> {

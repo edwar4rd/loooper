@@ -36,10 +36,17 @@ pub struct SetUpState {
     error_count: usize,
     /// The last error message.
     last_error: String,
+    // The button receiver for handling button presses.
+    pub button_rx: tokio::sync::mpsc::UnboundedReceiver<usize>,
+    /// The last pressed button.
+    pub last_button: Option<usize>,
 }
 
 impl SetUpState {
-    pub fn default_with_audio_state(audio_state: crate::audio::AudioState) -> Self {
+    pub fn default_with_audio_state(
+        audio_state: crate::audio::AudioState,
+        button_rx: tokio::sync::mpsc::UnboundedReceiver<usize>,
+    ) -> Self {
         SetUpState {
             mbpm: 120000,
             precision: 10000,
@@ -55,6 +62,8 @@ impl SetUpState {
             audio_state,
             error_count: 0,
             last_error: String::new(),
+            button_rx,
+            last_button: None,
         }
     }
 
@@ -75,6 +84,11 @@ impl SetUpState {
                 if let Some(error) = maybe_error {
                     self.last_error = error;
                     self.error_count += 1;
+                }
+            }
+            maybe_button = self.button_rx.recv() => {
+                if let Some(button) = maybe_button {
+                    self.last_button = Some(button);
                 }
             }
         }
@@ -113,6 +127,8 @@ impl SetUpState {
             audio_state: rolling_state.audio_state,
             error_count: 0,
             last_error: String::new(),
+            button_rx: rolling_state.button_rx,
+            last_button: None,
         }
     }
 }
@@ -333,6 +349,13 @@ impl Widget for &SetUpState {
             format!("Message #{}: ", self.error_count).into(),
             self.last_error.as_str().into(),
         ]));
+
+        if let Some(last_button) = self.last_button {
+            texts.push(Line::from(vec![
+                "Last Button Pressed: ".into(),
+                last_button.to_string().into(),
+            ]));
+        }
 
         Paragraph::new(Text::from(texts))
             .centered()

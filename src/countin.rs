@@ -30,6 +30,10 @@ pub struct CountInState {
     pub event_stream: EventStream,
     /// The audio state.
     pub audio_state: AudioState,
+    // The button receiver for handling button presses.
+    pub button_rx: tokio::sync::mpsc::UnboundedReceiver<usize>,
+    /// The last pressed button.
+    pub last_button: Option<usize>,
 }
 
 impl CountInState {
@@ -76,6 +80,8 @@ impl CountInState {
             loops: prepare_state.loops,
             event_stream: prepare_state.event_stream,
             audio_state: prepare_state.audio_state,
+            button_rx: prepare_state.button_rx,
+            last_button: None,
         }
     }
 }
