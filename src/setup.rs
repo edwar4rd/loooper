@@ -40,6 +40,7 @@ pub struct SetUpState {
     pub button_rx: tokio::sync::mpsc::UnboundedReceiver<usize>,
     /// The last pressed button.
     pub last_button: Option<usize>,
+    button_press_count: usize,
 }
 
 impl SetUpState {
@@ -64,6 +65,7 @@ impl SetUpState {
             last_error: String::new(),
             button_rx,
             last_button: None,
+            button_press_count: 0,
         }
     }
 
@@ -89,6 +91,7 @@ impl SetUpState {
             maybe_button = self.button_rx.recv() => {
                 if let Some(button) = maybe_button {
                     self.last_button = Some(button);
+                    self.button_press_count += 1;
                 }
             }
         }
@@ -129,6 +132,7 @@ impl SetUpState {
             last_error: String::new(),
             button_rx: rolling_state.button_rx,
             last_button: None,
+            button_press_count: 0
         }
     }
 }
@@ -354,6 +358,9 @@ impl Widget for &SetUpState {
             texts.push(Line::from(vec![
                 "Last Button Pressed: ".into(),
                 last_button.to_string().into(),
+                " (".into(),
+                self.button_press_count.to_string().into(),
+                ")".into(),
             ]));
         }
 
