@@ -132,7 +132,7 @@ impl SetUpState {
             last_error: String::new(),
             button_rx: rolling_state.button_rx,
             last_button: None,
-            button_press_count: 0
+            button_press_count: 0,
         }
     }
 }
