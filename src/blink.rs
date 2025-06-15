@@ -1,3 +1,4 @@
+use color_eyre::Result;
 use std::{thread, time};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -51,11 +52,11 @@ fn display_image(
 pub fn blink(
     current_millibeat: std::sync::Arc<std::sync::atomic::AtomicU32>,
     mut shutdown: tokio::sync::oneshot::Receiver<()>,
-) {
-    let gpio = rppal::gpio::Gpio::new().expect("Failed to access GPIO");
-    let mut data_pin = gpio.get(10).unwrap().into_output_low();
-    let mut latch_pin = gpio.get(8).unwrap().into_output_low();
-    let mut clock_pin = gpio.get(11).unwrap().into_output_low();
+) -> Result<()> {
+    let gpio = rppal::gpio::Gpio::new()?;
+    let mut data_pin = gpio.get(10)?.into_output_low();
+    let mut latch_pin = gpio.get(8)?.into_output_low();
+    let mut clock_pin = gpio.get(11)?.into_output_low();
 
     let interval = time::Duration::from_micros(100);
     let mut last_beat = 0;
@@ -108,4 +109,6 @@ pub fn blink(
     shift_out(&mut clock_pin, &mut data_pin, BitOrder::LSBFirst, 0);
     latch_pin.set_high();
     latch_pin.set_low();
+
+    Ok(())
 }
