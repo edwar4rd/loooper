@@ -13,11 +13,11 @@ pub fn button(
     for (button_id, pin) in BUTTON_PINS.iter().enumerate() {
         let mut pin = gpio.get(*pin)?.into_input_pullup();
         if (1..=8).contains(&button_id) {
-            pin.set_interrupt(rppal::gpio::Trigger::Both, Some(Duration::from_millis(50)))?;
+            pin.set_interrupt(rppal::gpio::Trigger::Both, Some(Duration::from_millis(1)))?;
         } else {
             pin.set_interrupt(
                 rppal::gpio::Trigger::FallingEdge,
-                Some(Duration::from_millis(50)),
+                Some(Duration::from_millis(1)),
             )?;
         }
         pins.push(pin);
@@ -28,7 +28,7 @@ pub fn button(
 
     loop {
         if let Some((pin, _event)) = gpio.poll_interrupts(&polled_pins, false, Some(interval))? {
-            let button_id = BUTTON_PINS.iter().position(|&p| p == pin.pin()).unwrap() + 1;
+            let button_id = BUTTON_PINS.iter().position(|&p| p == pin.pin()).unwrap();
             if button_id > 8 {
                 let pad_id = button_id - 9;
                 let _ = pad_tx.send(pad_id);
