@@ -1,7 +1,7 @@
 use color_eyre::Result;
 use std::time::Duration;
 
-const BUTTON_PINS: [u8; 13] = [23, 22, 21, 3, 2, 0, 7, 27, 26, 15, 16, 5, 6];
+const BUTTON_PINS: [u8; 13] = [13, 6, 5, 22, 27, 17, 4, 16, 12, 14, 15, 24, 25];
 
 pub fn button(
     pad_tx: tokio::sync::mpsc::UnboundedSender<usize>,
