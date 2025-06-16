@@ -1,5 +1,5 @@
-use crate::filter::Filter;
 use crate::filter::Delay;
+use crate::filter::Filter;
 
 pub struct Reverb {
     combs: Vec<Delay>,
@@ -33,7 +33,11 @@ impl Reverb {
             .iter()
             .map(|&ms| Delay::new(to_samples(ms), allpass_fb, 1.0))
             .collect();
-        Reverb { combs, allpasses, gain }
+        Reverb {
+            combs,
+            allpasses,
+            gain,
+        }
     }
 }
 

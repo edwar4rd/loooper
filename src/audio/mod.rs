@@ -17,9 +17,9 @@ pub struct AudioState {
     pub loop_length: Vec<Arc<AtomicU32>>,             // Main -> Audio
     pub loop_starting: Vec<Arc<AtomicBool>>,          // Main -> Audio
     pub loop_layering: Vec<Arc<AtomicBool>>,          // Main -> Audio
-    pub loop_wah:      Vec<Arc<AtomicBool>>,          // Main -> Audio
-    pub loop_reverb:   Vec<Arc<AtomicBool>>,          // Main -> Audio
-    pub loop_distortion: Vec<Arc<AtomicBool>>,       // Main -> Audio
+    pub loop_wah: Vec<Arc<AtomicBool>>,               // Main -> Audio
+    pub loop_reverb: Vec<Arc<AtomicBool>>,            // Main -> Audio
+    pub loop_distortion: Vec<Arc<AtomicBool>>,        // Main -> Audio
     pub loop_playing: Vec<Arc<AtomicBool>>,           // Audio -> Main
     pub loop_recording: Vec<Arc<AtomicBool>>,         // Audio -> Main
     pub current_millibeat: Arc<AtomicU32>,            // Audio -> Main

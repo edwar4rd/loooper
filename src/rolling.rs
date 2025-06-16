@@ -174,7 +174,7 @@ impl Widget for &RollingState {
                 } else {
                     "".into()
                 },
-                                if loop_state.wah {
+                if loop_state.wah {
                     "W".set_style(Color::Rgb(255, 0, 0)).bold()
                 } else {
                     "W".set_style(Color::Rgb(128, 128, 128)).bold()
