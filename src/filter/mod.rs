@@ -1,6 +1,7 @@
 mod delay;
 mod distortion;
 mod wa;
+mod reverb;
 pub use delay::Delay;
 pub use distortion::Distortion;
 pub use wa::Wah;
