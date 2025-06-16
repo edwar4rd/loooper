@@ -28,6 +28,10 @@ pub struct PrepareState {
     pub event_stream: EventStream,
     /// The audio state.
     pub audio_state: AudioState,
+    // The button receiver for handling button presses.
+    pub button_rx: tokio::sync::mpsc::UnboundedReceiver<usize>,
+    /// The last pressed button.
+    pub last_button: Option<usize>,
 }
 
 impl PrepareState {
@@ -68,6 +72,8 @@ impl PrepareState {
             loops: setup_state.loops,
             event_stream: setup_state.event_stream,
             audio_state: setup_state.audio_state,
+            button_rx: setup_state.button_rx,
+            last_button: None,
         }
     }
 }

@@ -30,6 +30,10 @@ pub struct RollingState {
     pub event_stream: EventStream,
     /// The audio state.
     pub audio_state: AudioState,
+    // The button receiver for handling button presses.
+    pub button_rx: tokio::sync::mpsc::UnboundedReceiver<usize>,
+    /// The last pressed button.
+    pub last_button: Option<usize>,
 }
 
 impl RollingState {
@@ -75,6 +79,8 @@ impl RollingState {
             loops: countin_state.loops,
             event_stream: countin_state.event_stream,
             audio_state: countin_state.audio_state,
+            button_rx: countin_state.button_rx,
+            last_button: None,
         }
     }
 }

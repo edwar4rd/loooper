@@ -1,5 +1,5 @@
+use color_eyre::Result;
 use std::{thread, time};
-use wiringpi::pin::{OutputPin, Value, WiringPi};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum BitOrder {
@@ -8,55 +8,55 @@ enum BitOrder {
 }
 
 fn shift_out(
-    clock_pin: &OutputPin<WiringPi>,
-    data_pin: &OutputPin<WiringPi>,
+    clock_pin: &mut rppal::gpio::OutputPin,
+    data_pin: &mut rppal::gpio::OutputPin,
     order: BitOrder,
     data: u8,
 ) {
     for i in 0..8 {
         if order == BitOrder::MSBFirst {
             if data & (1 << i) != 0 {
-                data_pin.digital_write(Value::High);
+                data_pin.set_high();
             } else {
-                data_pin.digital_write(Value::Low);
+                data_pin.set_low();
             }
         } else if data & (1 << (7 - i)) != 0 {
-            data_pin.digital_write(Value::High);
+            data_pin.set_high();
         } else {
-            data_pin.digital_write(Value::Low);
+            data_pin.set_low();
         }
-        clock_pin.digital_write(Value::High);
-        clock_pin.digital_write(Value::Low);
+        clock_pin.set_high();
+        clock_pin.set_low();
     }
 }
 
 fn display_image(
-    data_pin: &OutputPin<WiringPi>,
-    latch_pin: &OutputPin<WiringPi>,
-    clock_pin: &OutputPin<WiringPi>,
+    data_pin: &mut rppal::gpio::OutputPin,
+    latch_pin: &mut rppal::gpio::OutputPin,
+    clock_pin: &mut rppal::gpio::OutputPin,
     interval: time::Duration,
     image: u64,
 ) {
     // Send each byte of the image
     for i in 0..8 {
-        latch_pin.digital_write(Value::Low);
+        latch_pin.set_low();
         let b = 1 << i;
         let a = (image >> (i * 8)) as u8;
         shift_out(clock_pin, data_pin, BitOrder::LSBFirst, !b);
         shift_out(clock_pin, data_pin, BitOrder::MSBFirst, a);
         thread::sleep(interval);
-        latch_pin.digital_write(Value::High);
+        latch_pin.set_high();
     }
 }
 
 pub fn blink(
     current_millibeat: std::sync::Arc<std::sync::atomic::AtomicU32>,
     mut shutdown: tokio::sync::oneshot::Receiver<()>,
-) {
-    let pi = wiringpi::setup();
-    let data_pin = pi.output_pin(12);
-    let latch_pin = pi.output_pin(10);
-    let clock_pin = pi.output_pin(14);
+) -> Result<()> {
+    let gpio = rppal::gpio::Gpio::new()?;
+    let mut data_pin = gpio.get(10)?.into_output_low();
+    let mut latch_pin = gpio.get(8)?.into_output_low();
+    let mut clock_pin = gpio.get(11)?.into_output_low();
 
     let interval = time::Duration::from_micros(100);
     let mut last_beat = 0;
@@ -76,16 +76,16 @@ pub fn blink(
     ];
     let mut current_image = 0;
 
-    latch_pin.digital_write(Value::Low);
-    shift_out(&clock_pin, &data_pin, BitOrder::LSBFirst, 255);
-    shift_out(&clock_pin, &data_pin, BitOrder::LSBFirst, 0);
-    latch_pin.digital_write(Value::High);
+    latch_pin.set_low();
+    shift_out(&mut clock_pin, &mut data_pin, BitOrder::LSBFirst, 255);
+    shift_out(&mut clock_pin, &mut data_pin, BitOrder::LSBFirst, 0);
+    latch_pin.set_high();
 
     loop {
         display_image(
-            &data_pin,
-            &latch_pin,
-            &clock_pin,
+            &mut data_pin,
+            &mut latch_pin,
+            &mut clock_pin,
             interval,
             IMAGES[current_image],
         );
@@ -104,9 +104,11 @@ pub fn blink(
     }
 
     // Ensure the latch is low before exiting
-    latch_pin.digital_write(Value::Low);
-    shift_out(&clock_pin, &data_pin, BitOrder::LSBFirst, 255);
-    shift_out(&clock_pin, &data_pin, BitOrder::LSBFirst, 0);
-    latch_pin.digital_write(Value::High);
-    latch_pin.digital_write(Value::Low);
+    latch_pin.set_low();
+    shift_out(&mut clock_pin, &mut data_pin, BitOrder::LSBFirst, 255);
+    shift_out(&mut clock_pin, &mut data_pin, BitOrder::LSBFirst, 0);
+    latch_pin.set_high();
+    latch_pin.set_low();
+
+    Ok(())
 }
